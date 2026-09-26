@@ -1,0 +1,14 @@
+node_modules
+dist
+android
+android-shell
+assets
+scripts
+test
+docs
+.git
+.env
+*.db
+*.db-wal
+*.db-shm
+*.apk

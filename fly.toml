@@ -1,0 +1,37 @@
+# Fly.io deployment. `fly launch --no-deploy` will offer to rewrite this; decline
+# and keep it, because the volume mount and the always-on machine matter.
+app = "melodle"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+  DATA_FILE = "/data/melodle.db"
+
+# Accounts, ratings and round history are SQLite on this volume. Without it,
+# every deploy hands everyone a blank slate.
+[[mounts]]
+  source = "melodle_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # A guessing game that sleeps loses the round you were in the middle of.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/api/ping"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

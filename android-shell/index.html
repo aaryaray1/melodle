@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Melodle</title>
+    <style>
+      :root {
+        --ink-900: #150b26;
+        --ink-800: #241541;
+        --line: #46307a;
+        --line-strong: #7a57c4;
+        --haze: #b0a0dc;
+        --paper: #f7f1ff;
+        --violet: #a874ff;
+        --signal: #ffad36;
+        --miss: #f2678c;
+        --hit: #4fd1a5;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem calc(1rem + env(safe-area-inset-left, 0px));
+        background: radial-gradient(120% 65% at 50% -12%, #4a2a8c 0%, #2a1550 38%, transparent 70%), var(--ink-900);
+        color: var(--paper);
+        font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font-size: 16px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { width: min(100%, 26rem); }
+      .mark {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1.75rem;
+      }
+      .bars { display: flex; align-items: center; gap: 3px; height: 26px; }
+      .bars i { display: block; width: 4px; border-radius: 2px; background: var(--signal); }
+      .bars i:nth-child(1) { height: 30%; }
+      .bars i:nth-child(2) { height: 65%; }
+      .bars i:nth-child(3) { height: 100%; }
+      .bars i:nth-child(4) { height: 48%; background: #3b2f55; }
+      .bars i:nth-child(5) { height: 22%; background: #3b2f55; }
+      h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
+      p { margin: 0 0 1.25rem; color: var(--haze); font-size: 0.95rem; }
+      label { display: block; font-size: 0.78rem; color: var(--haze); margin-bottom: 0.35rem; }
+      input {
+        width: 100%;
+        min-height: 48px;
+        padding: 0.7rem 0.9rem;
+        border-radius: 8px;
+        border: 1px solid var(--line-strong);
+        background: var(--ink-900);
+        color: var(--paper);
+        font: inherit;
+      }
+      input:focus { outline: 2px solid var(--violet); outline-offset: 2px; border-color: var(--violet); }
+      button {
+        width: 100%;
+        min-height: 48px;
+        margin-top: 0.85rem;
+        border: none;
+        border-radius: 8px;
+        background: var(--violet);
+        color: var(--ink-900);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button[disabled] { opacity: 0.55; }
+      .status { margin: 0.9rem 0 0; font-size: 0.85rem; min-height: 1.4rem; }
+      .status[data-tone='bad'] { color: var(--miss); }
+      .status[data-tone='good'] { color: var(--hit); }
+      .status[data-tone='busy'] { color: var(--haze); }
+      .hint {
+        margin-top: 1.75rem;
+        padding-top: 1.1rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.8rem;
+        color: var(--haze);
+      }
+      code { color: var(--paper); font-size: 0.8rem; word-break: break-all; }
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark">
+        <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        <h1>Melodle</h1>
+      </div>
+
+      <div id="connecting" class="hidden">
+        <p id="connecting-text">Looking for your Melodle server…</p>
+      </div>
+
+      <form id="form">
+        <p>Point this at the computer running Melodle. Both need to be on the same Wi-Fi.</p>
+        <label for="address">Server address</label>
+        <input
+          id="address"
+          name="address"
+          type="text"
+          inputmode="url"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          placeholder="192.168.1.20:8787"
+        />
+        <button type="submit" id="connect">Connect</button>
+        <p class="status" id="status" role="status"></p>
+        <p class="hint">
+          On that computer run <code>npm run start:lan</code>. It prints the address to type here.
+        </p>
+      </form>
+    </main>
+
+    <script>
+      (function () {
+        var KEY = 'melodle.server';
+        var form = document.getElementById('form');
+        var input = document.getElementById('address');
+        var button = document.getElementById('connect');
+        var status = document.getElementById('status');
+        var connecting = document.getElementById('connecting');
+        var connectingText = document.getElementById('connecting-text');
+
+        function say(message, tone) {
+          status.textContent = message;
+          status.setAttribute('data-tone', tone || '');
+        }
+
+        // Accepts "192.168.1.20", "192.168.1.20:8787" or a full URL.
+        function normalise(value) {
+          var raw = (value || '').trim().replace(/\/+$/, '');
+          if (!raw) return '';
+          if (!/^https?:\/\//i.test(raw)) raw = 'http://' + raw;
+          try {
+            var url = new URL(raw);
+            if (!url.port && url.protocol === 'http:') url.port = '8787';
+            return url.origin;
+          } catch (error) {
+            return '';
+          }
+        }
+
+        function reach(origin, timeoutMs) {
+          var controller = new AbortController();
+          var timer = setTimeout(function () {
+            controller.abort();
+          }, timeoutMs);
+          return fetch(origin + '/api/ping', { signal: controller.signal, credentials: 'omit' })
+            .then(function (response) {
+              clearTimeout(timer);
+              if (!response.ok) throw new Error('status ' + response.status);
+              return response.json();
+            })
+            .then(function (body) {
+              if (!body || body.app !== 'melodle') throw new Error('not melodle');
+              return true;
+            });
+        }
+
+        function go(origin) {
+          window.localStorage.setItem(KEY, origin);
+          window.location.replace(origin + '/');
+        }
+
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var origin = normalise(input.value);
+          if (!origin) {
+            say('That does not look like an address. Try 192.168.1.20:8787', 'bad');
+            return;
+          }
+          button.disabled = true;
+          say('Trying ' + origin + '…', 'busy');
+          reach(origin, 6000).then(
+            function () {
+              say('Found it. Loading Melodle…', 'good');
+              go(origin);
+            },
+            function () {
+              button.disabled = false;
+              say('No Melodle server answered there. Check the address and that it is running.', 'bad');
+            },
+          );
+        });
+
+        var saved = window.localStorage.getItem(KEY);
+        if (saved) {
+          input.value = saved;
+          form.classList.add('hidden');
+          connecting.classList.remove('hidden');
+          connectingText.textContent = 'Reconnecting to ' + saved + '…';
+          reach(saved, 5000).then(
+            function () {
+              go(saved);
+            },
+            function () {
+              connecting.classList.add('hidden');
+              form.classList.remove('hidden');
+              say('Could not reach ' + saved + '. Is the server running?', 'bad');
+            },
+          );
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Melodle</string>
+    <string name="title_activity_main">Melodle</string>
+    <string name="package_name">net.melodle.client</string>
+    <string name="custom_url_scheme">net.melodle.client</string>
+</resources>
