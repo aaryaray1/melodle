@@ -9,7 +9,7 @@ import { spotifyMix } from './spotify.ts';
 import { youtubeTracks } from './youtube.ts';
 
 /** Enough from each person to feel present, without a ten minute wait to start. */
-const PER_MEMBER = 45;
+const PER_MEMBER = 80;
 
 const SOURCE_ORDER: ProviderId[] = ['spotify', 'lastfm', 'youtube'];
 

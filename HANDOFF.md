@@ -25,6 +25,22 @@ About 6,400 lines across `server/`, `src/`, `shared/`. 70 tests, all passing.
 - Mobile: no overflow at 360 and 390px, 44px touch targets, bottom sheets
 - The production build under its CSP: audio decode, fonts and waveform all fine
 
+## Pools and difficulty (2026-09-26)
+
+- **Bigger pools.** Charts now add Deezer editorial playlists for the genre on
+  top of the 100-song chart (`server/providers/editorial.ts`, shared with
+  decades). Measured live: global 406, rock 330, hip hop 379, 80s 302, 10s 352.
+  History sources resolve up to 200 songs, parties 80 per member.
+- **The song count is no longer shown** anywhere on the page.
+- **Difficulty 1-5**, per browser in the saved settings. Every correct endless
+  guess moves it up one step, to at most 5; a missed endless song sends it back
+  to 1. Endless picks from `difficultyBand`: the pool sorted by Deezer `rank`, a
+  40% window sliding from the biggest hits (1) to the deep cuts (5). The song of
+  the day neither uses nor moves it, so everyone still shares one song.
+  Verified in headless Chromium: level 1 picked songs at popularity percentile
+  0.10-0.18, level 5 at 0.93; losing the daily song left it at 5; losing an
+  endless song at 5 dropped it to 1; it survives a reload.
+
 ## Built but never run against the live service
 
 **Spotify.** No client ID or secret on this machine, so "Your mix", the OAuth
@@ -88,6 +104,26 @@ would rather.
 - iPhones: open the address in Safari, Share, Add to Home Screen.
 
 ## Hosting
+
+**Live on the home Linux box (2026-09-26).** The project moved from Windows to
+Linux Mint; the `.cmd` scripts are Windows-only history. `scripts/deploy.sh`
+builds the image and runs the `melodle` container on port 8787 with
+`--restart unless-stopped`; the docker service is enabled at boot, so it comes
+back after a reboot. Data is in the `melodle_data` volume. `.env` is passed with
+`--env-file` (plain KEY=value, no quotes) and has a fresh `SESSION_SECRET` and
+`INVITE_CODE`. The Last.fm key did not come across from Windows — add it to
+`.env` and rerun `scripts/deploy.sh` (the setup panel is off in production).
+
+The image is two-stage: build + typecheck + precompress, then a runtime with
+only express, run by plain `node` (Node 24 strips the types). 184 MB, ~30 MB RAM.
+Hashed assets are served as precompressed brotli/gzip with a one-year immutable
+cache: 280 kB of client down to 75 kB on the wire.
+
+**Reachable at `http://91.178.182.43:8787`.** The owner mapped the port with
+`scripts/upnp-forward.py 8787` (router 192.168.128.1, UPnP, to .240). A UPnP
+mapping can vanish when the router reboots; rerun the script, or make it a
+permanent forward in the router's admin page. The No-IP name `eternityandepilogue.ddns.net` currently has no A record
+(free hostnames expire unless confirmed every 30 days), although `noip2` runs.
 
 `Dockerfile` + `fly.toml` are written and the image is verified locally: builds,
 serves, streams audio, invite gate active, and an account created in one

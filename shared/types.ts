@@ -18,6 +18,8 @@ export interface Track {
   link?: string;
   /** In a party, whose listening this song came from. */
   contributor?: string;
+  /** Deezer's popularity score, up to about a million. Drives difficulty. */
+  rank?: number;
 }
 
 export interface ResolvedTracks {

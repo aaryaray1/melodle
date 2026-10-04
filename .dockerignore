@@ -3,7 +3,6 @@ dist
 android
 android-shell
 assets
-scripts
 test
 docs
 .git
@@ -12,3 +11,4 @@ docs
 *.db-wal
 *.db-shm
 *.apk
+scripts/*.cmd

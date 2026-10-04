@@ -3,7 +3,10 @@ import { test } from 'node:test';
 import type { Track } from '../shared/types.ts';
 import {
   dailyTrack,
+  difficultyBand,
   hash,
+  MAX_DIFFICULTY,
+  nextDifficulty,
   nextUnlock,
   playableTracks,
   randomTrack,
@@ -76,7 +79,7 @@ test('a one-song pool repeats rather than looping forever', () => {
 
 test('the shared result shows the stage grid without naming the song', () => {
   const text = shareText({
-    label: 'Global top 100',
+    label: 'Global hits',
     day: '2026-09-21',
     daily: true,
     status: 'won',
@@ -152,4 +155,59 @@ test('the daily pick shifts once a song is ruled out', () => {
   const before = dailyTrack(pool, 'charts:0', '2026-09-21');
   const after = dailyTrack(playableTracks(pool, { [before?.id ?? '']: -1 }), 'charts:0', '2026-09-21');
   assert.notEqual(after?.id, before?.id);
+});
+
+function ranked(count: number): Track[] {
+  // Index 0 is the biggest hit: rank falls as the index rises.
+  return Array.from({ length: count }, (_, index) => ({
+    id: `deezer:${index}`,
+    title: `Song ${index}`,
+    artist: 'Artist',
+    previewUrl: 'https://cdnt-preview.dzcdn.net/x.mp3',
+    previewFrom: 'deezer' as const,
+    rank: 1_000_000 - index * 1000,
+  }));
+}
+
+test('difficulty 1 draws only from the most popular songs, 5 only from the least', () => {
+  const tracks = ranked(100).reverse();
+  const easy = difficultyBand(tracks, 1).map((track) => Number(track.id.split(':')[1]));
+  const hard = difficultyBand(tracks, MAX_DIFFICULTY).map((track) => Number(track.id.split(':')[1]));
+  assert.equal(easy.length, 40);
+  assert.equal(Math.max(...easy), 39);
+  assert.equal(hard.length, 40);
+  assert.equal(Math.min(...hard), 60);
+});
+
+test('each difficulty step moves the band toward obscurity', () => {
+  const tracks = ranked(200);
+  let previous = -1;
+  for (let level = 1; level <= MAX_DIFFICULTY; level += 1) {
+    const indexes = difficultyBand(tracks, level).map((track) => Number(track.id.split(':')[1]));
+    const middle = indexes.reduce((sum, value) => sum + value, 0) / indexes.length;
+    assert.ok(middle > previous, `level ${level} should be harder than level ${level - 1}`);
+    previous = middle;
+  }
+});
+
+test('a small pool still leaves every difficulty something to play', () => {
+  for (let level = 1; level <= MAX_DIFFICULTY; level += 1) {
+    assert.ok(difficultyBand(ranked(6), level).length >= 5);
+  }
+  assert.equal(difficultyBand([], 3).length, 0);
+});
+
+test('songs without a popularity score count as the most obscure', () => {
+  const tracks = ranked(20);
+  const unknown = { ...tracks[0], id: 'itunes:1', rank: undefined } as Track;
+  assert.ok(!difficultyBand([unknown, ...tracks], 1).some((track) => track.id === 'itunes:1'));
+  assert.ok(difficultyBand([unknown, ...tracks], MAX_DIFFICULTY).some((track) => track.id === 'itunes:1'));
+});
+
+test('difficulty climbs one step per correct guess, stops at 5, and a miss sends it back to 1', () => {
+  assert.equal(nextDifficulty(1, true), 2);
+  assert.equal(nextDifficulty(3, false), 1);
+  assert.equal(nextDifficulty(MAX_DIFFICULTY, false), 1);
+  assert.equal(nextDifficulty(MAX_DIFFICULTY, true), MAX_DIFFICULTY);
+  assert.equal(nextDifficulty(Number.NaN, true), 2);
 });

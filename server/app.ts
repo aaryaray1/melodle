@@ -5,6 +5,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { env } from './lib/env.ts';
 import { UpstreamError } from './lib/http.ts';
 import { sessionMiddleware } from './lib/session.ts';
+import { staticSite } from './lib/static.ts';
 import { audioRouter } from './routes/audio.ts';
 import { authRouter } from './routes/auth.ts';
 import { accountRouter } from './routes/account.ts';
@@ -69,7 +70,5 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
 });
 
 if (env.isProduction) {
-  const dist = path.join(here, '..', 'dist');
-  app.use(express.static(dist, { index: false, maxAge: '1h' }));
-  app.get(/.*/, (_request, response) => response.sendFile(path.join(dist, 'index.html')));
+  app.use(staticSite(path.join(here, '..', 'dist')));
 }

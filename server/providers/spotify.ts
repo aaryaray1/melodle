@@ -104,7 +104,7 @@ export function seedFrom(track: SpotifyTrack | undefined): TrackSeed | null {
 export async function spotifyTracks(
   tokens: OAuthTokens,
   variant: string,
-  limit = 120,
+  limit = 200,
   onRefresh?: (tokens: OAuthTokens) => void,
 ): Promise<ResolvedTracks> {
   const token = await accessToken(tokens, onRefresh);
@@ -117,7 +117,7 @@ export async function spotifyTracks(
     const payload = await get<{ items?: { track?: SpotifyTrack }[] }>('me/player/recently-played?limit=50');
     raw.push(...(payload.items ?? []).map((item) => item.track));
   } else if (kind === 'saved') {
-    for (const offset of [0, 50]) {
+    for (const offset of [0, 50, 100, 150]) {
       const payload = await get<{ items?: { track?: SpotifyTrack }[] }>(`me/tracks?limit=50&offset=${offset}`);
       raw.push(...(payload.items ?? []).map((item) => item.track));
       if ((payload.items?.length ?? 0) < 50) break;
@@ -224,7 +224,7 @@ export function rankMix(lists: WeightedList[]): MixRanking {
 
 export async function spotifyMix(
   tokens: OAuthTokens,
-  limit = 120,
+  limit = 200,
   onRefresh?: (tokens: OAuthTokens) => void,
 ): Promise<ResolvedTracks> {
   const token = await accessToken(tokens, onRefresh);

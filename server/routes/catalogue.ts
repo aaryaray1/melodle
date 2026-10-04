@@ -65,7 +65,7 @@ catalogueRouter.get('/me', async (request, response) => {
 
   const party = session.userId ? partyFor(session.userId) : null;
   const variants: Record<ProviderId, VariantOption[]> = {
-    charts: await chartVariants().catch(() => [{ id: '0', label: 'Global top 100' }]),
+    charts: await chartVariants().catch(() => [{ id: '0', label: 'Global hits' }]),
     decades: DECADE_VARIANTS,
     party: party ? [{ id: 'all', label: `${party.name} · everyone` }] : [],
     lastfm: LASTFM_VARIANTS,
@@ -124,12 +124,12 @@ catalogueRouter.get('/pool', async (request, response) => {
     const save = (fresh: OAuthTokens) => saveConnection(session.userId as number, 'spotify', fresh, fresh.account);
     const tokens = tokensFor(session, 'spotify');
     const resolved =
-      variant === 'mix' ? await spotifyMix(tokens, 120, save) : await spotifyTracks(tokens, variant, 120, save);
+      variant === 'mix' ? await spotifyMix(tokens, 200, save) : await spotifyTracks(tokens, variant, 200, save);
     pool = { source, variant, label: labelFor(SPOTIFY_VARIANTS, variant, 'Your mix'), ...resolved };
   } else if (source === 'youtube') {
     const tokens = tokensFor(session, 'youtube');
     const variant = requested || 'liked';
-    const resolved = await youtubeTracks(tokens, variant, 120, (fresh) =>
+    const resolved = await youtubeTracks(tokens, variant, 200, (fresh) =>
       saveConnection(session.userId as number, 'youtube', fresh, fresh.account),
     );
     const variants = await youtubeVariants(tokens).catch(() => YOUTUBE_BASE_VARIANTS);

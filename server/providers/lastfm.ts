@@ -118,7 +118,7 @@ async function seedsFor(user: string, variant: string, limit: number): Promise<T
   return toSeeds(raw, limit);
 }
 
-export async function lastfmTracks(user: string, variant: string, limit = 120): Promise<ResolvedTracks> {
+export async function lastfmTracks(user: string, variant: string, limit = 200): Promise<ResolvedTracks> {
   const seeds = await seedsFor(user, variant, limit);
   const resolved = await mapLimit(seeds, 6, (seed) => resolvePreview(seed));
   const tracks = resolved.filter((track): track is Track => track !== null);

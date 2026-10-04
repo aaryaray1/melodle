@@ -134,13 +134,13 @@ export async function youtubeVariants(tokens: OAuthTokens): Promise<VariantOptio
 export async function youtubeTracks(
   tokens: OAuthTokens,
   variant: string,
-  limit = 120,
+  limit = 200,
   onRefresh?: (tokens: OAuthTokens) => void,
 ): Promise<ResolvedTracks> {
   const token = await accessToken(tokens, onRefresh);
   const snippets = variant.startsWith('playlist:')
-    ? await pagedSnippets(token, `playlistItems?part=snippet&playlistId=${encodeURIComponent(variant.slice(9))}`, 3)
-    : await pagedSnippets(token, 'videos?part=snippet&myRating=like', 3);
+    ? await pagedSnippets(token, `playlistItems?part=snippet&playlistId=${encodeURIComponent(variant.slice(9))}`, 5)
+    : await pagedSnippets(token, 'videos?part=snippet&myRating=like', 5);
 
   const seen = new Set<string>();
   const seeds: TrackSeed[] = [];

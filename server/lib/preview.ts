@@ -28,6 +28,7 @@ interface DeezerTrack {
   title_short?: string;
   preview?: string;
   link?: string;
+  rank?: number;
   artist?: { name?: string };
   album?: { title?: string; cover_medium?: string; cover_big?: string };
 }
@@ -77,6 +78,7 @@ async function fromDeezer(seed: TrackSeed): Promise<Track | null> {
     previewUrl: track.preview as string,
     previewFrom: 'deezer',
     link: safeUrl(seed.link ?? track.link),
+    rank: track.rank,
   };
 }
 
@@ -138,6 +140,7 @@ export function trackFromDeezer(raw: DeezerTrack): Track | null {
     previewUrl: raw.preview,
     previewFrom: 'deezer',
     link: safeUrl(raw.link),
+    rank: raw.rank,
   };
 }
 

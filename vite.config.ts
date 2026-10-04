@@ -6,5 +6,7 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': { target: 'http://127.0.0.1:8787', changeOrigin: true } },
   },
-  build: { outDir: 'dist', sourcemap: true },
+  // Hidden: maps are still written for debugging, but the page no longer points
+  // every visitor's devtools at a 1.2 MB download.
+  build: { outDir: 'dist', sourcemap: 'hidden' },
 });

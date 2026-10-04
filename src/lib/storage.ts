@@ -18,6 +18,8 @@ export interface Settings {
   variant: string;
   daily: boolean;
   startMode: StartMode;
+  /** 1 to 5. Rises with every correct endless guess; a miss sends it back to 1. */
+  difficulty: number;
 }
 
 const emptyStats: LocalStats = {

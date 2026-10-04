@@ -13,6 +13,8 @@ import { api, ApiError } from '../lib/api.ts';
 import { loadProgress, loadSettings, saveProgress, saveSettings, type Settings } from '../lib/storage.ts';
 import {
   dailyTrack,
+  difficultyBand,
+  nextDifficulty,
   playableTracks,
   randomTrack,
   sourceKey,
@@ -22,7 +24,7 @@ import {
 } from './rules.ts';
 import type { AccountApi } from './useAccount.ts';
 
-const DEFAULTS: Settings = { source: 'charts', variant: '0', daily: true, startMode: 'opening' };
+const DEFAULTS: Settings = { source: 'charts', variant: '0', daily: true, startMode: 'opening', difficulty: 1 };
 
 export interface Round {
   answer: Track;
@@ -111,7 +113,7 @@ export function useGame(account: AccountApi): Game {
       if (answer) setRound({ answer, guesses: [], status: 'playing', daily: true });
       return;
     }
-    const answer = randomTrack(playable);
+    const answer = randomTrack(difficultyBand(playable, settings.difficulty));
     if (answer) setRound({ answer, guesses: [], status: 'playing', daily: false });
     // Ratings must not restart a round in progress, so `playable` is read, not watched.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,6 +189,10 @@ export function useGame(account: AccountApi): Game {
       setRound({ ...round, guesses, status });
       if (round.daily) saveProgress(key, day, { answerId: round.answer.id, guesses, status });
       if (status !== 'playing') {
+        // The song of the day is the same for everyone, so it neither uses nor moves difficulty.
+        if (!round.daily) {
+          setSettings((current) => ({ ...current, difficulty: nextDifficulty(current.difficulty, won) }));
+        }
         engine.stop();
         setPlaying(false);
         report(
@@ -223,9 +229,9 @@ export function useGame(account: AccountApi): Game {
   const nextRound = useCallback(() => {
     if (!playable.length) return;
     setSettings((current) => (current.daily ? { ...current, daily: false } : current));
-    const answer = randomTrack(playable, round?.answer.id);
+    const answer = randomTrack(difficultyBand(playable, settings.difficulty), round?.answer.id);
     if (answer) setRound({ answer, guesses: [], status: 'playing', daily: false });
-  }, [playable, round?.answer.id]);
+  }, [playable, round?.answer.id, settings.difficulty]);
 
   const chooseSource = useCallback((source: ProviderId, variant: string) => {
     setSettings((current) => ({ ...current, source, variant }));

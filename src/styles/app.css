@@ -332,6 +332,29 @@
   font-size: var(--step--1);
 }
 
+.difficulty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-1);
+}
+
+.difficulty-pips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.difficulty-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+  transition: background-color 240ms ease;
+}
+
+.difficulty-pip-on {
+  background: var(--signal);
+}
+
 /* Attempt log ------------------------------------------------------------- */
 
 .guesses {
@@ -1246,8 +1269,8 @@ label {
     gap: var(--gap-1);
   }
 
-  .skip-row .muted {
-    text-align: center;
+  .skip-row .difficulty {
+    justify-content: center;
   }
 
   /* The rating buttons get their own row instead of squeezing the title. */

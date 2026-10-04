@@ -11,7 +11,7 @@ import { Transport } from './components/Transport.tsx';
 import { Waveform } from './components/Waveform.tsx';
 import { useAccount } from './game/useAccount.ts';
 import { useGame } from './game/useGame.ts';
-import { nextUnlock, shareText } from './game/rules.ts';
+import { MAX_DIFFICULTY, nextUnlock, shareText } from './game/rules.ts';
 import { api } from './lib/api.ts';
 
 const CONNECT_MESSAGES: Record<string, string> = {
@@ -192,13 +192,19 @@ export default function App() {
               <button type="button" className="button" onClick={game.skip} disabled={!game.clip}>
                 {upcoming ? `Skip, unlock ${upcoming}s` : 'Skip the last one'}
               </button>
-              <span className="muted">
-                {game.pool
-                  ? `${game.pool.tracks.length} songs in play${
-                      game.pool.dropped ? `, ${game.pool.dropped} had no preview` : ''
-                    }`
-                  : 'Loading songs'}
-              </span>
+{game.settings.daily ? null : (
+                <span className="difficulty" aria-label={`Difficulty ${game.settings.difficulty} of ${MAX_DIFFICULTY}`}>
+                  <span className="muted">Difficulty</span>
+                  <span className="difficulty-pips" aria-hidden="true">
+                    {Array.from({ length: MAX_DIFFICULTY }, (_, index) => (
+                      <span
+                        key={index}
+                        className={index < game.settings.difficulty ? 'difficulty-pip difficulty-pip-on' : 'difficulty-pip'}
+                      />
+                    ))}
+                  </span>
+                </span>
+              )}
             </div>
           </>
         ) : null}

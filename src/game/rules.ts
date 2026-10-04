@@ -70,6 +70,31 @@ export function playableTracks(tracks: Track[], ratings: Record<string, 1 | -1>)
   return kept.length >= MIN_POOL ? kept : tracks;
 }
 
+export const MAX_DIFFICULTY = 5;
+
+function clampDifficulty(level: number): number {
+  return Number.isFinite(level) ? Math.min(Math.max(Math.round(level), 1), MAX_DIFFICULTY) : 1;
+}
+
+/** A correct guess moves you up one level, to at most 5; a miss sends you back to 1. */
+export function nextDifficulty(level: number, won: boolean): number {
+  return won ? Math.min(clampDifficulty(level) + 1, MAX_DIFFICULTY) : 1;
+}
+
+/**
+ * The slice of the pool a difficulty draws from. Songs are ordered by Deezer
+ * popularity and each level looks at 40% of them, the window sliding from the
+ * biggest hits at level 1 to the deepest cuts at level 5. Neighbouring levels
+ * overlap, so a step up feels like a step rather than a cliff.
+ */
+export function difficultyBand(tracks: Track[], level: number): Track[] {
+  const byPopularity = [...tracks].sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
+  const size = Math.min(byPopularity.length, Math.max(MIN_POOL, Math.ceil(byPopularity.length * 0.4)));
+  const step = (clampDifficulty(level) - 1) / (MAX_DIFFICULTY - 1);
+  const start = Math.round(step * (byPopularity.length - size));
+  return byPopularity.slice(start, start + size);
+}
+
 const MARKS: Record<GuessOutcome, string> = { right: '🟩', wrong: '🟥', skip: '⬛' };
 
 export function shareText(options: {
