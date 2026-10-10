@@ -24,7 +24,7 @@ import {
 } from './rules.ts';
 import type { AccountApi } from './useAccount.ts';
 
-const DEFAULTS: Settings = { source: 'charts', variant: '0', daily: true, startMode: 'opening', difficulty: 1 };
+const DEFAULTS: Settings = { source: 'charts', variant: '0', daily: true, startMode: 'opening', difficulty: 1, difficultyLocked: false };
 
 export interface Round {
   answer: Track;
@@ -48,6 +48,7 @@ export interface Game {
   chooseSource: (source: ProviderId, variant: string) => void;
   setDaily: (daily: boolean) => void;
   setStartMode: (mode: StartMode) => void;
+  setDifficultyLocked: (locked: boolean) => void;
   play: () => void;
   guess: (track: Track) => void;
   skip: () => void;
@@ -191,7 +192,7 @@ export function useGame(account: AccountApi): Game {
       if (status !== 'playing') {
         // The song of the day is the same for everyone, so it neither uses nor moves difficulty.
         if (!round.daily) {
-          setSettings((current) => ({ ...current, difficulty: nextDifficulty(current.difficulty, won) }));
+          setSettings((current) => ({ ...current, difficulty: nextDifficulty(current.difficulty, won, current.difficultyLocked) }));
         }
         engine.stop();
         setPlaying(false);
@@ -241,6 +242,10 @@ export function useGame(account: AccountApi): Game {
     setSettings((current) => ({ ...current, daily }));
   }, []);
 
+  const setDifficultyLocked = useCallback((difficultyLocked: boolean) => {
+    setSettings((current) => ({ ...current, difficultyLocked }));
+  }, []);
+
   const setStartMode = useCallback((startMode: StartMode) => {
     engine.stop();
     setPlaying(false);
@@ -262,6 +267,7 @@ export function useGame(account: AccountApi): Game {
     chooseSource,
     setDaily,
     setStartMode,
+    setDifficultyLocked,
     play,
     guess,
     skip,

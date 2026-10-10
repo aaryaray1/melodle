@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Track } from '../../shared/types.ts';
 import { buildIndex, searchTracks } from '../game/search.ts';
+import { Cover } from './Cover.tsx';
 
 interface Props {
   tracks: Track[];
@@ -20,6 +21,11 @@ export function GuessBar({ tracks, disabled, onGuess }: Props) {
   useEffect(() => {
     setActive(0);
   }, [query]);
+
+  // The list scrolls now, so arrow keys must keep the highlighted row on screen.
+  useEffect(() => {
+    document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: 'nearest' });
+  }, [active, listId]);
 
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
@@ -75,7 +81,7 @@ export function GuessBar({ tracks, disabled, onGuess }: Props) {
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={showList ? `${listId}-${active}` : undefined}
-          placeholder={disabled ? 'Round over' : 'Know it? Type a song or an artist'}
+          placeholder={disabled ? 'Round over' : 'Type a song or artist'}
           value={query}
           disabled={disabled}
           autoComplete="off"
@@ -111,8 +117,14 @@ export function GuessBar({ tracks, disabled, onGuess }: Props) {
               onMouseEnter={() => setActive(index)}
               onClick={() => choose(track)}
             >
-              <span className="guessbar-title">{track.title}</span>
-              <span className="guessbar-artist">{track.artist}</span>
+              <Cover track={track} size={48} className="guessbar-cover" lazy />
+              <span className="guessbar-text">
+                <span className="guessbar-title">{track.title}</span>
+                <span className="guessbar-artist">
+                  {track.artist}
+                  {track.album && track.album !== track.title ? ` · ${track.album}` : ''}
+                </span>
+              </span>
             </li>
           ))}
         </ul>

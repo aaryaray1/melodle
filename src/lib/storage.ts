@@ -18,8 +18,10 @@ export interface Settings {
   variant: string;
   daily: boolean;
   startMode: StartMode;
-  /** 1 to 5. Rises with every correct endless guess; a miss sends it back to 1. */
+  /** 1 to 5. Rises with every correct endless guess, wrapping from 5 back to 1. */
   difficulty: number;
+  /** Holds difficulty where it is, win or lose. */
+  difficultyLocked: boolean;
 }
 
 const emptyStats: LocalStats = {

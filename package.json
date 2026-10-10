@@ -16,7 +16,7 @@
     "test": "node --test \"test/**/*.test.ts\"",
     "check": "npm run typecheck && npm test",
     "start:lan": "cross-env NODE_ENV=production HOST=0.0.0.0 tsx server/index.ts",
-    "apk": "npm run build && cap sync android && cd android && gradlew.bat assembleDebug",
+    "apk": "scripts/build-apk.sh",
     "apk:icons": "capacitor-assets generate --android"
   },
   "dependencies": {

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import type { Track } from '../shared/types.ts';
-import { ARTIST_SONGS, buildIndex, searchTracks } from '../src/game/search.ts';
+import { buildIndex, MAX_RESULTS, searchTracks } from '../src/game/search.ts';
 
 function make(title: string, artist: string): Track {
   return {
@@ -34,10 +34,8 @@ const pool: Track[] = [
 const index = buildIndex(pool);
 const titles = (query: string) => searchTracks(index, query).map((track) => track.title);
 
-test('searching an artist lists their songs, most popular first', () => {
-  const found = titles('the weeknd');
-  assert.equal(found.length, ARTIST_SONGS);
-  assert.deepEqual(found, [
+test('searching an artist lists every one of their songs, most popular first', () => {
+  assert.deepEqual(titles('the weeknd'), [
     'Blinding Lights',
     'Starboy',
     'Save Your Tears',
@@ -45,6 +43,7 @@ test('searching an artist lists their songs, most popular first', () => {
     'Die For You',
     'Can’t Feel My Face',
     'In Your Eyes',
+    'After Hours',
   ]);
 });
 
@@ -53,7 +52,7 @@ test('a partial artist name works before you finish typing', () => {
   assert.deepEqual(titles('michael').slice(0, 3), ['Billie Jean', 'Beat It', 'Thriller']);
 });
 
-test('an artist with fewer songs than seven returns only what they have', () => {
+test('an artist with only a few songs returns only what they have', () => {
   const found = titles('billie eilish');
   assert.deepEqual(found, ['bad guy', 'lovely', 'ocean eyes']);
 });
@@ -74,7 +73,7 @@ test('a misspelt title still turns up', () => {
 });
 
 test('case and punctuation do not matter', () => {
-  assert.equal(titles('THE WEEKND').length, ARTIST_SONGS);
+  assert.equal(titles('THE WEEKND').length, 8);
   assert.ok(titles('cant feel my face').includes('Can’t Feel My Face'));
 });
 
@@ -87,10 +86,24 @@ test('nonsense returns nothing rather than the whole pool', () => {
   assert.ok(titles('zzzqqqxyw').length < 3);
 });
 
-test('the list never grows past what the dropdown can show', () => {
-  for (const query of ['the', 'a', 'e', 'michael', 'the weeknd']) {
-    assert.ok(searchTracks(index, query).length <= 9, `${query} returned too many`);
-  }
+test('a word in the middle of titles finds every song with it', () => {
+  const found = titles('eyes');
+  assert.ok(found.includes('In Your Eyes'));
+  assert.ok(found.includes('ocean eyes'));
+});
+
+test('every song whose title starts with the query is listed, not just the first two', () => {
+  const big = buildIndex(
+    Array.from({ length: 30 }, (_, n) => make(`Love Song ${n}`, `Singer ${n}`)).concat(make('Lovely Day', 'Bill Withers')),
+  );
+  const found = searchTracks(big, 'love').map((track) => track.title);
+  assert.equal(found.length, 31);
+  assert.equal(found[0], 'Love Song 0', 'pool order still decides who comes first');
+});
+
+test('the list stops at the cap however broad the query', () => {
+  const huge = buildIndex(Array.from({ length: 200 }, (_, n) => make(`The Song ${n}`, `The Band ${n}`)));
+  assert.equal(searchTracks(huge, 'the').length, MAX_RESULTS);
 });
 
 test('an empty pool searches cleanly', () => {

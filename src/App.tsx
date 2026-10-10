@@ -13,6 +13,7 @@ import { useAccount } from './game/useAccount.ts';
 import { useGame } from './game/useGame.ts';
 import { MAX_DIFFICULTY, nextUnlock, shareText } from './game/rules.ts';
 import { api } from './lib/api.ts';
+import { installHint } from './lib/platform.ts';
 
 const CONNECT_MESSAGES: Record<string, string> = {
   denied: 'You turned that connection down. Nothing was saved.',
@@ -46,6 +47,16 @@ export default function App() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // The page heats with difficulty. The song of the day ignores difficulty, so it stays purple.
+  const heat = game.settings.daily ? 1 : game.settings.difficulty;
+  useEffect(() => {
+    document.documentElement.dataset.difficulty = String(heat);
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink-900').trim();
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ink);
+  }, [heat]);
+  const [hint] = useState(() =>
+    installHint(navigator.userAgent, window.matchMedia('(display-mode: standalone)').matches),
+  );
 
   useEffect(() => {
     const message = readConnectNotice();
@@ -192,10 +203,14 @@ export default function App() {
               <button type="button" className="button" onClick={game.skip} disabled={!game.clip}>
                 {upcoming ? `Skip, unlock ${upcoming}s` : 'Skip the last one'}
               </button>
-{game.settings.daily ? null : (
-                <span className="difficulty" aria-label={`Difficulty ${game.settings.difficulty} of ${MAX_DIFFICULTY}`}>
+              {game.settings.daily ? null : (
+                <span className="difficulty">
                   <span className="muted">Difficulty</span>
-                  <span className="difficulty-pips" aria-hidden="true">
+                  <span
+                    className="difficulty-pips"
+                    role="img"
+                    aria-label={`Difficulty ${game.settings.difficulty} of ${MAX_DIFFICULTY}`}
+                  >
                     {Array.from({ length: MAX_DIFFICULTY }, (_, index) => (
                       <span
                         key={index}
@@ -203,6 +218,24 @@ export default function App() {
                       />
                     ))}
                   </span>
+                  <button
+                    type="button"
+                    className="difficulty-lock"
+                    aria-pressed={game.settings.difficultyLocked}
+                    title={game.settings.difficultyLocked ? 'Difficulty stays put' : 'Difficulty climbs as you win'}
+                    onClick={() => game.setDifficultyLocked(!game.settings.difficultyLocked)}
+                  >
+                    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                      <rect x="3" y="7" width="10" height="8" fill="currentColor" />
+                      <path
+                        d={game.settings.difficultyLocked ? 'M5 7V5a3 3 0 0 1 6 0v2' : 'M5 7V5a3 3 0 0 1 6 0'}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
+                    </svg>
+                    {game.settings.difficultyLocked ? 'Locked' : 'Lock'}
+                  </button>
                 </span>
               )}
             </div>
@@ -233,7 +266,18 @@ export default function App() {
         ) : null}
       </main>
 
-      <footer className="footnote">Space plays the snippet. Slash jumps to search. Enter locks your guess in.</footer>
+      <footer className="footnote">
+        {hint === 'android' ? (
+          <p className="install-hint">
+            <a href="/melodle.apk" download>
+              Get the Android app
+            </a>
+          </p>
+        ) : hint === 'ios' ? (
+          <p className="install-hint">Install it: tap Share, then Add to Home Screen.</p>
+        ) : null}
+        Space plays the snippet. Slash jumps to search. Enter locks your guess in.
+      </footer>
 
       <Sheet open={sourcesOpen} title="Where your songs come from" onClose={() => setSourcesOpen(false)}>
         <SourceSheet

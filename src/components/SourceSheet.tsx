@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Me, ProviderId, VariantOption } from '../../shared/types.ts';
+import { blendVariant, MAX_BLEND, selectionOf, toggleSelection, type BlendPart } from '../../shared/blend.ts';
 import { api } from '../lib/api.ts';
 import { PartyPanel } from './PartyPanel.tsx';
 
@@ -182,6 +183,37 @@ function Chips({
   );
 }
 
+function PickChips({
+  options,
+  source,
+  selection,
+  onToggle,
+}: {
+  options: VariantOption[];
+  source: BlendPart['source'];
+  selection: BlendPart[];
+  onToggle: (part: BlendPart) => void;
+}) {
+  return (
+    <div className="chips" role="group">
+      {options.map((option) => {
+        const active = selection.some((part) => part.source === source && part.id === option.id);
+        return (
+          <button
+            key={option.id}
+            type="button"
+            className={active ? 'chip chip-active' : 'chip'}
+            aria-pressed={active}
+            onClick={() => onToggle({ source, id: option.id })}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SourceSheet({
   me,
   source,
@@ -198,6 +230,14 @@ export function SourceSheet({
   const [error, setError] = useState<string | null>(null);
   const [openSetup, setOpenSetup] = useState<ProviderId | null>(null);
   const [redirects, setRedirects] = useState<{ spotify: string; youtube: string } | null>(null);
+  const [picks, setPicks] = useState<BlendPart[]>(() => selectionOf(source, variant));
+  const picksChanged = picks.length > 0 && blendVariant(picks) !== blendVariant(selectionOf(source, variant));
+  const togglePick = (part: BlendPart) => setPicks((current) => toggleSelection(current, part));
+  const playPicks = () => {
+    const [only] = picks;
+    if (picks.length === 1 && only) onChoose(only.source, only.id);
+    else onChoose('blend', blendVariant(picks));
+  };
 
   useEffect(() => {
     api.redirects().then(setRedirects).catch(() => setRedirects(null));
@@ -224,21 +264,34 @@ export function SourceSheet({
         <header className="source-head">
           <div>
             <h3 className="source-name">Popular now</h3>
-            <p className="source-blurb">What the charts are playing today, overall or by genre</p>
+            <p className="source-blurb">What the charts are playing today, overall or by genre. Pick several.</p>
           </div>
         </header>
-        <Chips options={me.variants.charts} provider="charts" source={source} variant={variant} onChoose={onChoose} />
+        <PickChips options={me.variants.charts} source="charts" selection={picks} onToggle={togglePick} />
       </section>
 
       <section className="source">
         <header className="source-head">
           <div>
             <h3 className="source-name">By decade</h3>
-            <p className="source-blurb">The songs that defined each decade</p>
+            <p className="source-blurb">The songs that defined each decade. Pick several, or mix them with genres.</p>
           </div>
         </header>
-        <Chips options={me.variants.decades} provider="decades" source={source} variant={variant} onChoose={onChoose} />
+        <PickChips options={me.variants.decades} source="decades" selection={picks} onToggle={togglePick} />
       </section>
+
+      <div className="pick-bar" role="status">
+        <p className="pick-bar-text">
+          {picks.length >= MAX_BLEND
+            ? `That's the most you can mix: ${MAX_BLEND}.`
+            : 'Mix as many genres and decades as you like.'}
+        </p>
+        {picksChanged ? (
+          <button type="button" className="button button-primary" onClick={playPicks}>
+            {picks.length === 1 ? 'Play this' : `Play these ${picks.length}`}
+          </button>
+        ) : null}
+      </div>
 
       <section className="source">
         <header className="source-head">

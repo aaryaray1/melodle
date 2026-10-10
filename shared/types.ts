@@ -1,4 +1,4 @@
-export type ProviderId = 'charts' | 'decades' | 'party' | 'lastfm' | 'spotify' | 'youtube';
+export type ProviderId = 'charts' | 'decades' | 'blend' | 'party' | 'lastfm' | 'spotify' | 'youtube';
 
 export type SourceGroup = 'now' | 'decades' | 'history';
 

@@ -204,10 +204,18 @@ test('songs without a popularity score count as the most obscure', () => {
   assert.ok(difficultyBand([unknown, ...tracks], MAX_DIFFICULTY).some((track) => track.id === 'itunes:1'));
 });
 
-test('difficulty climbs one step per correct guess, stops at 5, and a miss sends it back to 1', () => {
+test('a win climbs one step, a miss holds, and a win at 5 starts over at 1', () => {
   assert.equal(nextDifficulty(1, true), 2);
-  assert.equal(nextDifficulty(3, false), 1);
-  assert.equal(nextDifficulty(MAX_DIFFICULTY, false), 1);
-  assert.equal(nextDifficulty(MAX_DIFFICULTY, true), MAX_DIFFICULTY);
-  assert.equal(nextDifficulty(Number.NaN, true), 2);
+  assert.equal(nextDifficulty(4, true), 5);
+  assert.equal(nextDifficulty(MAX_DIFFICULTY, true), 1);
+  assert.equal(nextDifficulty(3, false), 3);
+  assert.equal(nextDifficulty(MAX_DIFFICULTY, false), MAX_DIFFICULTY);
+  assert.equal(nextDifficulty(Number.NaN, false), 1);
+  assert.equal(nextDifficulty(99, false), MAX_DIFFICULTY);
+});
+
+test('a locked difficulty never moves', () => {
+  assert.equal(nextDifficulty(3, true, true), 3);
+  assert.equal(nextDifficulty(MAX_DIFFICULTY, true, true), MAX_DIFFICULTY);
+  assert.equal(nextDifficulty(2, false, true), 2);
 });

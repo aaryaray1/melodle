@@ -9,10 +9,8 @@ export interface Searchable {
   rank: number;
 }
 
-/** How many of one artist's songs to offer when you search for that artist. */
-export const ARTIST_SONGS = 7;
-const MAX_RESULTS = 9;
-const TITLE_LEADS = 2;
+/** The list scrolls, so it can hold every match a real query produces. */
+export const MAX_RESULTS = 40;
 const ARTIST_MATCH = 0.78;
 const LOOSE_MATCH = 0.42;
 const WORD_MATCH_MIN = 3;
@@ -49,9 +47,10 @@ interface Group {
 
 /**
  * Searching an artist should answer "what do they have", so a matching artist
- * gets a block of their best-known songs in pool order rather than whichever
- * titles happen to score well. A title that starts with the query still leads,
- * so searching "billie" finds Billie Jean as well as Billie Eilish.
+ * gets a block of all their songs in pool order rather than whichever titles
+ * happen to score well. Titles that start with the query lead, so searching
+ * "billie" finds Billie Jean as well as Billie Eilish; then the artist blocks;
+ * then every other title that merely contains or resembles the query.
  */
 export function searchTracks(entries: Searchable[], query: string): Track[] {
   const needle = normalize(query);
@@ -88,12 +87,12 @@ export function searchTracks(entries: Searchable[], query: string): Track[] {
   };
 
   titleLeads.sort((a, b) => a.rank - b.rank);
-  for (const entry of titleLeads.slice(0, TITLE_LEADS)) take(entry);
+  for (const entry of titleLeads) take(entry);
 
   const ordered = [...groups.values()].sort((a, b) => b.strength - a.strength);
   for (const group of ordered) {
     group.entries.sort((a, b) => a.rank - b.rank);
-    for (const entry of group.entries.slice(0, ARTIST_SONGS)) take(entry);
+    for (const entry of group.entries) take(entry);
     if (picked.length >= MAX_RESULTS) break;
   }
 

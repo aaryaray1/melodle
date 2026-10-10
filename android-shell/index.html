@@ -2,18 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="melodle-server" content="" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <title>Melodle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap"
+    />
     <style>
+      /* The same cabinet as the site: purple tokens, pixel marquee, CRT glass. */
       :root {
         --ink-900: #150b26;
+        --ink-850: #1c1033;
         --ink-800: #241541;
+        --ink-700: #33205a;
         --line: #46307a;
         --line-strong: #7a57c4;
         --haze: #b0a0dc;
         --paper: #f7f1ff;
         --violet: #a874ff;
+        --violet-deep: #6d3fc0;
         --signal: #ffad36;
         --miss: #f2678c;
         --hit: #4fd1a5;
@@ -27,64 +38,100 @@
         padding: 1.5rem calc(1rem + env(safe-area-inset-left, 0px));
         background: radial-gradient(120% 65% at 50% -12%, #4a2a8c 0%, #2a1550 38%, transparent 70%), var(--ink-900);
         color: var(--paper);
-        font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
-        font-size: 16px;
-        line-height: 1.55;
-        -webkit-font-smoothing: antialiased;
+        font-family: 'VT323', 'Courier New', monospace;
+        font-size: 21px;
+        line-height: 1.35;
+        font-synthesis: none;
       }
-      main { width: min(100%, 26rem); }
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 5;
+        background:
+          repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.28) 2px 3px),
+          radial-gradient(130% 100% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+      }
+      main {
+        width: min(100%, 26rem);
+        padding: 1.5rem 1.25rem;
+        border: 3px solid var(--ink-700);
+        border-radius: 6px;
+        background: radial-gradient(120% 90% at 50% 40%, var(--ink-850) 0%, #07040c 100%);
+        box-shadow: inset 0 0 0 1px var(--line), 0 0 0 3px var(--ink-900), 0 0 30px -6px var(--violet);
+      }
       .mark {
         display: flex;
         align-items: center;
-        gap: 0.6rem;
-        margin-bottom: 1.75rem;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.9rem;
+        border-bottom: 3px solid transparent;
+        border-image: linear-gradient(90deg, var(--violet-deep), var(--signal), var(--violet)) 1;
       }
-      .bars { display: flex; align-items: center; gap: 3px; height: 26px; }
-      .bars i { display: block; width: 4px; border-radius: 2px; background: var(--signal); }
+      .bars { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+      .bars i { display: block; width: 5px; background: var(--signal); box-shadow: 0 0 6px var(--signal); }
       .bars i:nth-child(1) { height: 30%; }
       .bars i:nth-child(2) { height: 65%; }
       .bars i:nth-child(3) { height: 100%; }
-      .bars i:nth-child(4) { height: 48%; background: #3b2f55; }
-      .bars i:nth-child(5) { height: 22%; background: #3b2f55; }
-      h1 { margin: 0; font-size: 1.4rem; letter-spacing: -0.02em; }
-      p { margin: 0 0 1.25rem; color: var(--haze); font-size: 0.95rem; }
-      label { display: block; font-size: 0.78rem; color: var(--haze); margin-bottom: 0.35rem; }
+      .bars i:nth-child(4) { height: 48%; background: #3b2f55; box-shadow: none; }
+      .bars i:nth-child(5) { height: 22%; background: #3b2f55; box-shadow: none; }
+      h1 {
+        margin: 0;
+        font-family: 'Press Start 2P', 'Courier New', monospace;
+        font-size: 1.05rem;
+        font-weight: 400;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        text-shadow: 2px 2px 0 var(--violet-deep), 0 0 10px var(--violet), 0 0 22px rgba(168, 116, 255, 0.6);
+      }
+      p { margin: 0 0 1.1rem; color: var(--haze); }
+      label { display: block; color: var(--haze); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.06em; }
       input {
         width: 100%;
         min-height: 48px;
-        padding: 0.7rem 0.9rem;
-        border-radius: 8px;
-        border: 1px solid var(--line-strong);
-        background: var(--ink-900);
-        color: var(--paper);
+        padding: 0.55rem 0.8rem;
+        border-radius: 3px;
+        border: 2px solid var(--line-strong);
+        background: #07040c;
+        color: var(--signal);
         font: inherit;
+        font-size: 1.15em;
       }
+      input::placeholder { color: #6f5f9c; }
       input:focus { outline: 2px solid var(--violet); outline-offset: 2px; border-color: var(--violet); }
       button {
         width: 100%;
         min-height: 48px;
         margin-top: 0.85rem;
-        border: none;
-        border-radius: 8px;
+        border: 2px solid #c9a8ff;
+        border-radius: 3px;
         background: var(--violet);
         color: var(--ink-900);
         font: inherit;
-        font-weight: 600;
+        font-size: 1.15em;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        box-shadow: 0 4px 0 var(--violet-deep), 0 0 16px -4px var(--violet);
         cursor: pointer;
       }
+      button:active:not([disabled]) { transform: translateY(3px); box-shadow: 0 1px 0 var(--violet-deep); }
       button[disabled] { opacity: 0.55; }
-      .status { margin: 0.9rem 0 0; font-size: 0.85rem; min-height: 1.4rem; }
+      .status { margin: 0.9rem 0 0; min-height: 1.4rem; }
       .status[data-tone='bad'] { color: var(--miss); }
       .status[data-tone='good'] { color: var(--hit); }
       .status[data-tone='busy'] { color: var(--haze); }
+      #connecting-text { color: var(--signal); animation: blink 1.1s steps(2) infinite; }
+      @keyframes blink { 50% { opacity: 0.35; } }
+      @media (prefers-reduced-motion: reduce) { #connecting-text { animation: none; } }
       .hint {
-        margin-top: 1.75rem;
-        padding-top: 1.1rem;
+        margin-top: 1.5rem;
+        padding-top: 1rem;
         border-top: 1px solid var(--line);
-        font-size: 0.8rem;
         color: var(--haze);
       }
-      code { color: var(--paper); font-size: 0.8rem; word-break: break-all; }
+      code { color: var(--paper); word-break: break-all; }
       .hidden { display: none; }
     </style>
   </head>
@@ -100,7 +147,7 @@
       </div>
 
       <form id="form">
-        <p>Point this at the computer running Melodle. Both need to be on the same Wi-Fi.</p>
+        <p>Point this at the computer running Melodle: its web address, or its IP on your Wi-Fi.</p>
         <label for="address">Server address</label>
         <input
           id="address"
@@ -110,13 +157,11 @@
           autocapitalize="none"
           autocorrect="off"
           spellcheck="false"
-          placeholder="192.168.1.20:8787"
+          placeholder="melodle.example.ts.net"
         />
         <button type="submit" id="connect">Connect</button>
         <p class="status" id="status" role="status"></p>
-        <p class="hint">
-          On that computer run <code>npm run start:lan</code>. It prints the address to type here.
-        </p>
+        <p class="hint">Ask whoever runs your Melodle server for its address. Insert coin to continue.</p>
       </form>
     </main>
 
@@ -135,11 +180,16 @@
           status.setAttribute('data-tone', tone || '');
         }
 
-        // Accepts "192.168.1.20", "192.168.1.20:8787" or a full URL.
+        // Accepts "192.168.1.20", "192.168.1.20:8787", a web address or a full URL.
+        // A bare IP is a home server on plain http; a bare name is a public https site.
         function normalise(value) {
           var raw = (value || '').trim().replace(/\/+$/, '');
           if (!raw) return '';
-          if (!/^https?:\/\//i.test(raw)) raw = 'http://' + raw;
+          if (!/^https?:\/\//i.test(raw)) {
+            var host = raw.split(/[:/]/)[0];
+            var local = /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host === 'localhost';
+            raw = (local ? 'http://' : 'https://') + raw;
+          }
           try {
             var url = new URL(raw);
             if (!url.port && url.protocol === 'http:') url.port = '8787';
@@ -192,7 +242,10 @@
           );
         });
 
-        var saved = window.localStorage.getItem(KEY);
+        // scripts/build-apk.sh writes the public server here, so a fresh install
+        // opens straight into the game. Empty means ask for an address.
+        var builtIn = normalise(document.querySelector('meta[name="melodle-server"]').content);
+        var saved = window.localStorage.getItem(KEY) || builtIn;
         if (saved) {
           input.value = saved;
           form.classList.add('hidden');

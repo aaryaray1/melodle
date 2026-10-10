@@ -32,14 +32,32 @@ About 6,400 lines across `server/`, `src/`, `shared/`. 70 tests, all passing.
   decades). Measured live: global 406, rock 330, hip hop 379, 80s 302, 10s 352.
   History sources resolve up to 200 songs, parties 80 per member.
 - **The song count is no longer shown** anywhere on the page.
-- **Difficulty 1-5**, per browser in the saved settings. Every correct endless
-  guess moves it up one step, to at most 5; a missed endless song sends it back
-  to 1. Endless picks from `difficultyBand`: the pool sorted by Deezer `rank`, a
-  40% window sliding from the biggest hits (1) to the deep cuts (5). The song of
-  the day neither uses nor moves it, so everyone still shares one song.
-  Verified in headless Chromium: level 1 picked songs at popularity percentile
-  0.10-0.18, level 5 at 0.93; losing the daily song left it at 5; losing an
-  endless song at 5 dropped it to 1; it survives a reload.
+- **Difficulty 1-5**, per browser in the saved settings. A correct endless guess
+  moves it up one step, and a win at 5 starts over at 1; a miss holds it. A lock
+  toggle beside the pips freezes it either way. Endless picks from
+  `difficultyBand`: the pool sorted by Deezer `rank`, a 40% window sliding from
+  the biggest hits (1) to the deep cuts (5). The song of the day neither uses nor
+  moves it.
+- **Mixing genres and decades** (`shared/blend.ts`): chips toggle, and "Play
+  these N" asks for the `blend` source, variant `charts:152,decades:1980s`
+  (sorted, so the same picks share a song of the day). The server interleaves
+  the parts round-robin, at most 8. Rock + The 80s is 673 songs.
+- **Arcade look.** Press Start 2P marquee, Pixelify Sans headings, VT323 text,
+  CRT scanlines and vignette, a synthwave floor, the waveform as a bezelled
+  screen. The page heats with difficulty: `data-difficulty` on `<html>`
+  redefines the same tokens in `tokens.css`, purple at 1 to red at 5, with the
+  phone status bar following. `test/palette.test.ts` checks contrast at every
+  level. The song of the day stays purple.
+- **Search with covers.** The guess list holds up to 40 matches and scrolls:
+  every title that starts with the query, then each matching artist's whole
+  catalogue in the pool, then looser matches. Each row has a 48px cover fetched
+  at 96px (`shared/artwork.ts` rewrites Deezer and Apple URLs; ~3 kB instead of
+  37 kB) or a pixel-note stand-in. The reveal shows the full cover at 128px
+  (96px on phones), framed green for a win and red for a loss. Checked live:
+  "love" lists 28 songs, Beyoncé 15 of 15 in a six-list mix.
+- Verified by driving the deployed build in headless Chromium, twice from a cold
+  restart: every difficulty rule, the lock, the reds at each level, the purple
+  song of the day, a genre+decade mix, fonts loading, no overflow at 390px.
 
 ## Built but never run against the live service
 
@@ -90,8 +108,7 @@ would rather.
    stage-solved as a difficulty score to balance a party's pool.
 3. **Verify the APK on a phone**, then decide whether a release-signed build is
    worth it.
-4. Optional: YouTube Music verification, a release keystore, hosting the server
-   so the app works off the home Wi-Fi.
+4. Optional: YouTube Music verification, a release keystore.
 
 ## Sharing it
 
@@ -119,11 +136,20 @@ only express, run by plain `node` (Node 24 strips the types). 184 MB, ~30 MB RAM
 Hashed assets are served as precompressed brotli/gzip with a one-year immutable
 cache: 280 kB of client down to 75 kB on the wire.
 
-**Reachable at `http://91.178.182.43:8787`.** The owner mapped the port with
-`scripts/upnp-forward.py 8787` (router 192.168.128.1, UPnP, to .240). A UPnP
-mapping can vanish when the router reboots; rerun the script, or make it a
-permanent forward in the router's admin page. The No-IP name `eternityandepilogue.ddns.net` currently has no A record
-(free hostnames expire unless confirmed every 30 days), although `noip2` runs.
+**Public at https://eternity-and-epilogue.tailc19105.ts.net (2026-10-10).**
+Tailscale Funnel (`tailscale funnel --bg 8787`, persisted by tailscaled, operator
+`abyss`) gives a fixed https address with a real certificate, independent of the
+home IP and the router. `PUBLIC_ORIGIN` in `.env` is that address, so session
+cookies are `Secure`: sign-in no longer sticks over the plain-http LAN address,
+use the https one everywhere. The site serves the APK at `/melodle.apk` with
+that address built in (`scripts/build-apk.sh`, then `scripts/deploy.sh`), and a
+bare domain typed into the launcher is treated as https. Verified over the
+public path (public DNS to Tailscale's ingress): page, pool, audio, APK,
+cookie, and a full round in headless Chromium.
+The laptop: Cinnamon does not sleep on lid close or idle, and
+`/etc/systemd/logind.conf.d/melodle.conf` ignores the lid when logged out.
+Every visitor reaches the server from one address through the proxy; the login
+throttle is keyed by address and username, so it still works per account.
 
 `Dockerfile` + `fly.toml` are written and the image is verified locally: builds,
 serves, streams audio, invite gate active, and an account created in one

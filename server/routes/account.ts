@@ -125,7 +125,7 @@ accountRouter.post('/rounds', (request, response) => {
     title: String(body.title ?? '').slice(0, 300),
     artist: String(body.artist ?? '').slice(0, 300),
     source: String(body.source ?? '').slice(0, 40),
-    variant: String(body.variant ?? '').slice(0, 60),
+    variant: String(body.variant ?? '').slice(0, 200),
     outcome,
     stage,
     day: String(body.day ?? '').slice(0, 10),

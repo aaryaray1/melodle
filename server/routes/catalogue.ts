@@ -16,7 +16,9 @@ import { DECADE_VARIANTS, decadeLabel, decadeTracks } from '../providers/decades
 import { LASTFM_VARIANTS, lastfmTracks } from '../providers/lastfm.ts';
 import { SPOTIFY_VARIANTS, spotifyConfigured, spotifyMix, spotifyTracks } from '../providers/spotify.ts';
 import { partyFor } from '../lib/parties.ts';
-import { partyTracks } from '../providers/party.ts';
+import { interleave, partyTracks } from '../providers/party.ts';
+import { blendLabel, blendVariant, parseBlend } from '../../shared/blend.ts';
+import { mapLimit } from '../lib/http.ts';
 import { YOUTUBE_BASE_VARIANTS, youtubeConfigured, youtubeTracks, youtubeVariants } from '../providers/youtube.ts';
 
 export const catalogueRouter = Router();
@@ -36,6 +38,7 @@ function connectionsOf(session: Session): Connections {
   return {
     charts: { connected: true, configured: true, needsAccount: false, detail: 'No account needed' },
     decades: { connected: true, configured: true, needsAccount: false, detail: 'No account needed' },
+    blend: { connected: true, configured: true, needsAccount: false, detail: 'No account needed' },
     party: {
       connected: Boolean(session.userId && partyFor(session.userId)),
       configured: true,
@@ -67,6 +70,7 @@ catalogueRouter.get('/me', async (request, response) => {
   const variants: Record<ProviderId, VariantOption[]> = {
     charts: await chartVariants().catch(() => [{ id: '0', label: 'Global hits' }]),
     decades: DECADE_VARIANTS,
+    blend: [],
     party: party ? [{ id: 'all', label: `${party.name} · everyone` }] : [],
     lastfm: LASTFM_VARIANTS,
     spotify: SPOTIFY_VARIANTS,
@@ -93,7 +97,19 @@ catalogueRouter.get('/pool', async (request, response) => {
   const session = request.session;
   let pool: Pool;
 
-  if (source === 'decades') {
+  if (source === 'blend') {
+    const parts = parseBlend(requested);
+    if (!parts.length) throw new UpstreamError('Pick at least one genre or decade', 400);
+    // Two at a time: a cold cache costs each part several Deezer calls.
+    const lists = await mapLimit(parts, 2, (part) =>
+      (part.source === 'charts' ? chartTracks(part.id) : decadeTracks(part.id)).catch(() => []),
+    );
+    const labels = await Promise.all(
+      parts.map((part) => (part.source === 'charts' ? chartLabel(part.id) : Promise.resolve(decadeLabel(part.id)))),
+    );
+    // Round-robin, so a short list is not drowned by a long one.
+    pool = { source, variant: blendVariant(parts), label: blendLabel(labels), tracks: interleave(lists), dropped: 0 };
+  } else if (source === 'decades') {
     const variant = requested || '1980s';
     const tracks = await decadeTracks(variant);
     pool = { source, variant, label: decadeLabel(variant), tracks, dropped: 0 };

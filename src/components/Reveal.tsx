@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Cover } from './Cover.tsx';
 import { STAGE_DURATIONS, type Rating, type Track } from '../../shared/types.ts';
 import type { Guess, Status } from '../game/rules.ts';
 
@@ -37,7 +38,7 @@ export function Reveal({ track, status, guesses, daily, rating, onRate, onNext, 
     <section className={won ? 'reveal reveal-won' : 'reveal reveal-lost'} aria-live="polite">
       <p className="reveal-verdict">{won ? `Spotted it on ${solvedAt}s` : 'Out of attempts'}</p>
       <div className="reveal-track">
-        {track.artwork ? <img className="reveal-art" src={track.artwork} alt="" width={72} height={72} /> : null}
+        <Cover track={track} size={128} className="reveal-art" full />
         <div className="reveal-meta">
           <h3 className="reveal-title">{track.title}</h3>
           <p className="reveal-artist">{track.artist}</p>

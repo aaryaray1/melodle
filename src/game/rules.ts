@@ -76,9 +76,14 @@ function clampDifficulty(level: number): number {
   return Number.isFinite(level) ? Math.min(Math.max(Math.round(level), 1), MAX_DIFFICULTY) : 1;
 }
 
-/** A correct guess moves you up one level, to at most 5; a miss sends you back to 1. */
-export function nextDifficulty(level: number, won: boolean): number {
-  return won ? Math.min(clampDifficulty(level) + 1, MAX_DIFFICULTY) : 1;
+/**
+ * A win moves you up one level and a win at 5 starts the climb over at 1; a miss
+ * keeps you where you are. Locked, the level never moves.
+ */
+export function nextDifficulty(level: number, won: boolean, locked = false): number {
+  const current = clampDifficulty(level);
+  if (locked || !won) return current;
+  return current === MAX_DIFFICULTY ? 1 : current + 1;
 }
 
 /**

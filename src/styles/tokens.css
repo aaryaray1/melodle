@@ -16,15 +16,25 @@
   --hit: #4fd1a5;
   --miss: #f2678c;
 
-  --display: 'Bricolage Grotesque', 'Trebuchet MS', sans-serif;
-  --text: 'Figtree', -apple-system, 'Segoe UI', sans-serif;
+  /* The page's backlight, CRT scanline tint and edge glow. Difficulty heats them. */
+  --glow-a: #4a2a8c;
+  --glow-b: #2a1550;
+  --scan: rgba(0, 0, 0, 0.28);
+  --vignette: rgba(0, 0, 0, 0.55);
+  --heat: 0;
 
-  --step--1: 0.82rem;
-  --step-0: 1rem;
-  --step-1: 1.2rem;
-  --step-2: 1.45rem;
-  --step-3: 1.85rem;
-  --step-4: clamp(2.1rem, 1.6rem + 2.4vw, 3rem);
+  /* Arcade type: a pixel marquee, pixel headings, a terminal for everything else. */
+  --marquee: 'Press Start 2P', 'Courier New', monospace;
+  --display: 'Pixelify Sans', 'Trebuchet MS', sans-serif;
+  --text: 'VT323', 'Courier New', monospace;
+
+  /* VT323 sits small on its body, so the scale runs a size up from a sans. */
+  --step--1: 1.05rem;
+  --step-0: 1.25rem;
+  --step-1: 1.4rem;
+  --step-2: 1.55rem;
+  --step-3: 1.95rem;
+  --step-4: clamp(2.2rem, 1.7rem + 2.4vw, 3.1rem);
 
   --gap-1: 0.375rem;
   --gap-2: 0.75rem;
@@ -32,10 +42,81 @@
   --gap-4: 2rem;
   --gap-5: 3rem;
 
-  --radius: 14px;
-  --radius-sm: 8px;
+  /* Cabinet corners: nearly square. */
+  --radius: 6px;
+  --radius-sm: 3px;
   --shell: 40rem;
   --ease-spring: cubic-bezier(0.2, 0.9, 0.24, 1);
+}
+
+/*
+ * Difficulty heats the cabinet. Level 1 is the original purple; each step trades
+ * violet for red in the same tokens, so every component follows without its own
+ * rules. Contrast pairs are checked by test/palette.test.ts at every level.
+ */
+:root[data-difficulty='2'] {
+  --ink-900: #180a24;
+  --ink-850: #211031;
+  --ink-800: #2b143f;
+  --ink-700: #3d1d57;
+  --line: #552c78;
+  --line-strong: #9450c4;
+  --haze: #c39ed8;
+  --violet: #c46cf5;
+  --violet-deep: #8236b8;
+  --glow-a: #6a2690;
+  --glow-b: #36124f;
+  --heat: 0.25;
+}
+
+:root[data-difficulty='3'] {
+  --ink-900: #1b0a1f;
+  --ink-850: #26102b;
+  --ink-800: #331437;
+  --ink-700: #481d4c;
+  --line: #66285f;
+  --line-strong: #b04a9e;
+  --haze: #d49cc6;
+  --violet: #e95fc4;
+  --violet-deep: #a02c88;
+  --glow-a: #8a2270;
+  --glow-b: #451238;
+  --scan: rgba(60, 0, 20, 0.3);
+  --heat: 0.5;
+}
+
+:root[data-difficulty='4'] {
+  --ink-900: #1d0a14;
+  --ink-850: #2a0f1c;
+  --ink-800: #381325;
+  --ink-700: #4f1b33;
+  --line: #73243f;
+  --line-strong: #c4436a;
+  --haze: #e09cb0;
+  --violet: #ff5a86;
+  --violet-deep: #b8264d;
+  --glow-a: #a01d45;
+  --glow-b: #4e0f22;
+  --scan: rgba(90, 0, 10, 0.32);
+  --vignette: rgba(120, 0, 10, 0.5);
+  --heat: 0.75;
+}
+
+:root[data-difficulty='5'] {
+  --ink-900: #1e0808;
+  --ink-850: #2b0d0c;
+  --ink-800: #3a1210;
+  --ink-700: #521a17;
+  --line: #7a231d;
+  --line-strong: #d64236;
+  --haze: #eda39b;
+  --violet: #ff4a3d;
+  --violet-deep: #c21f17;
+  --glow-a: #b3170f;
+  --glow-b: #560b08;
+  --scan: rgba(120, 0, 0, 0.34);
+  --vignette: rgba(170, 0, 0, 0.55);
+  --heat: 1;
 }
 
 *,
@@ -52,13 +133,16 @@ body {
   margin: 0;
   min-height: 100dvh;
   background:
-    radial-gradient(120% 65% at 50% -12%, #4a2a8c 0%, #2a1550 38%, transparent 70%),
+    radial-gradient(120% 65% at 50% -12%, var(--glow-a) 0%, var(--glow-b) 38%, transparent 70%),
     var(--ink-900);
+  transition: background-color 600ms ease;
   color: var(--paper);
   font-family: var(--text);
   font-size: var(--step-0);
   line-height: 1.55;
   font-variant-numeric: tabular-nums;
+  /* VT323 has one weight; a faked bold smears the pixels. */
+  font-synthesis: none;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -67,9 +151,9 @@ h2,
 h3,
 h4 {
   font-family: var(--display);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
   margin: 0;
 }
 
@@ -91,6 +175,50 @@ button {
   outline: 2px solid var(--violet);
   outline-offset: 3px;
   border-radius: 4px;
+}
+
+/*
+ * The CRT: scanlines over everything, and a vignette that darkens the edges like
+ * a curved tube. Both ignore the pointer. The synthwave floor sits behind it all.
+ */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+body::before {
+  z-index: 50;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 2px, var(--scan) 2px 3px),
+    radial-gradient(130% 100% at 50% 45%, transparent 55%, var(--vignette) 100%);
+  transition: background 600ms ease;
+}
+
+body::after {
+  z-index: -1;
+  top: auto;
+  height: 38vh;
+  background:
+    linear-gradient(to bottom, var(--ink-900) 0%, transparent 45%),
+    repeating-linear-gradient(to right, color-mix(in srgb, var(--violet) 32%, transparent) 0 1px, transparent 1px 56px),
+    repeating-linear-gradient(to bottom, color-mix(in srgb, var(--violet) 32%, transparent) 0 1px, transparent 1px 28px);
+  transform: perspective(240px) rotateX(58deg);
+  transform-origin: bottom;
+  opacity: 0.4;
+}
+
+/* At the top level the tube itself throbs red. */
+:root[data-difficulty='5'] body::before {
+  animation: overheat 2.4s ease-in-out infinite;
+}
+
+@keyframes overheat {
+  50% {
+    opacity: 0.7;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
