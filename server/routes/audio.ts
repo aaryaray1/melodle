@@ -3,8 +3,11 @@ import { pipeline } from 'node:stream/promises';
 import { Router } from 'express';
 import type { Response } from 'express';
 import { env } from '../lib/env.ts';
-import { UpstreamError } from '../lib/http.ts';
+import { DiskCache } from '../lib/diskcache.ts';
+import { fetchJson, UpstreamError } from '../lib/http.ts';
+import { canHearSongStart, introFile, IntroUnavailable } from '../lib/intro.ts';
 import { freshPreviewUrl } from '../lib/preview.ts';
+import type { SongFacts } from '../lib/youtube-match.ts';
 
 /**
  * The only route that fetches a URL the client names, so the host list is a
@@ -113,4 +116,48 @@ audioRouter.get('/audio', async (request, response) => {
     clearTimeout(headerTimer);
     response.off('close', giveUp);
   }
+});
+
+const trackFacts = new DiskCache<SongFacts | null>('track-facts', 30 * 24 * 60 * 60 * 1000, (facts) => facts !== null);
+
+async function factsFor(deezerId: string): Promise<SongFacts | null> {
+  return trackFacts.wrap(deezerId, async () => {
+    const info = await fetchJson<{ title_short?: string; title?: string; duration?: number; artist?: { name?: string } }>(
+      `https://api.deezer.com/track/${deezerId}`,
+    ).catch(() => null);
+    const title = info?.title_short || info?.title;
+    const artist = info?.artist?.name;
+    return title && artist ? { title, artist, duration: info?.duration } : null;
+  });
+}
+
+/**
+ * A song's real opening, cut from its YouTube album upload. Only for the
+ * accounts in SONG_START_USERS (any signed-in account if it is empty); everyone
+ * else keeps the Deezer previews. The client falls back to the preview
+ * whenever this answers anything but audio.
+ */
+audioRouter.get('/intro', async (request, response) => {
+  if (!request.session.userId) throw new UpstreamError('Sign in to hear songs from the very start', 401);
+  if (!canHearSongStart(request.session.userId)) {
+    throw new UpstreamError('Song starts are switched on for a few accounts only', 403);
+  }
+  const track = typeof request.query.track === 'string' ? request.query.track : '';
+  const match = /^deezer:(\d{1,15})$/.exec(track);
+  if (!match) throw new UpstreamError('Song starts are only found for Deezer tracks', 400);
+  const deezerId = match[1] as string;
+
+  const facts = await factsFor(deezerId);
+  if (!facts) throw new UpstreamError('Deezer does not know that track', 404);
+  let file: string | null;
+  try {
+    file = await introFile(deezerId, facts);
+  } catch (problem) {
+    if (problem instanceof IntroUnavailable) throw new UpstreamError('Song starts are not available right now', 503);
+    throw problem;
+  }
+  if (!file) throw new UpstreamError('No clean copy of this song start was found', 404);
+  response.setHeader('content-type', 'audio/mpeg');
+  response.setHeader('cache-control', 'private, max-age=86400');
+  response.sendFile(file);
 });

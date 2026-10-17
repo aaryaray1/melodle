@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { Connections, Me, Pool, ProviderId, VariantOption } from '../../shared/types.ts';
+import type { Connections, Me, Pool, ProviderId, Track, VariantOption } from '../../shared/types.ts';
 import {
   accountStats,
   getAccount,
@@ -15,10 +15,15 @@ import { chartLabel, chartTracks, chartVariants } from '../providers/charts.ts';
 import { DECADE_VARIANTS, decadeLabel, decadeTracks } from '../providers/decades.ts';
 import { LASTFM_VARIANTS, lastfmTracks } from '../providers/lastfm.ts';
 import { SPOTIFY_VARIANTS, spotifyConfigured, spotifyMix, spotifyTracks } from '../providers/spotify.ts';
+import { canHearSongStart } from '../lib/intro.ts';
+import { canEditKeys } from '../lib/keys.ts';
 import { partyFor } from '../lib/parties.ts';
 import { interleave, partyTracks } from '../providers/party.ts';
-import { blendLabel, blendVariant, parseBlend } from '../../shared/blend.ts';
-import { mapLimit } from '../lib/http.ts';
+import { blendLabel, blendVariant, crossLabel, parseBlend } from '../../shared/blend.ts';
+import { genreDecadeTracks } from '../providers/crossed.ts';
+import { fetchJson, mapLimit } from '../lib/http.ts';
+import { TtlCache } from '../lib/cache.ts';
+import { trackFromDeezer } from '../lib/preview.ts';
 import { YOUTUBE_BASE_VARIANTS, youtubeConfigured, youtubeTracks, youtubeVariants } from '../providers/youtube.ts';
 
 export const catalogueRouter = Router();
@@ -86,9 +91,34 @@ catalogueRouter.get('/me', async (request, response) => {
     stats: session.userId ? accountStats(session.userId) : null,
     ratings: session.userId ? listRatings(session.userId) : {},
     invitesRequired: Boolean(env.inviteCode),
+    keysEditable: canEditKeys(request),
+    songStart: canHearSongStart(session.userId),
     party: party ? { code: party.code, name: party.name, members: party.members, youAreHost: party.youAreHost } : null,
   };
   response.json(payload);
+});
+
+/**
+ * Guessing is not limited to the pool: the search box asks all of Deezer too.
+ * Results are cached per query for an hour, since every player typing shares
+ * the server's Deezer allowance.
+ */
+const searches = new TtlCache<Track[]>(60 * 60 * 1000, 2000);
+
+catalogueRouter.get('/search', async (request, response) => {
+  const query = (typeof request.query.q === 'string' ? request.query.q : '').trim().slice(0, 80);
+  if (query.length < 2) {
+    response.json({ tracks: [] });
+    return;
+  }
+  const tracks = await searches.wrap(query.toLowerCase(), async () => {
+    const payload = await fetchJson<{ data?: Parameters<typeof trackFromDeezer>[0][] }>(
+      `https://api.deezer.com/search?limit=40&q=${encodeURIComponent(query)}`,
+    );
+    return (payload.data ?? []).map(trackFromDeezer).filter((track): track is Track => track !== null);
+  });
+  response.setHeader('cache-control', 'private, max-age=300');
+  response.json({ tracks });
 });
 
 catalogueRouter.get('/pool', async (request, response) => {
@@ -100,15 +130,25 @@ catalogueRouter.get('/pool', async (request, response) => {
   if (source === 'blend') {
     const parts = parseBlend(requested);
     if (!parts.length) throw new UpstreamError('Pick at least one genre or decade', 400);
-    // Two at a time: a cold cache costs each part several Deezer calls.
-    const lists = await mapLimit(parts, 2, (part) =>
-      (part.source === 'charts' ? chartTracks(part.id) : decadeTracks(part.id)).catch(() => []),
-    );
-    const labels = await Promise.all(
-      parts.map((part) => (part.source === 'charts' ? chartLabel(part.id) : Promise.resolve(decadeLabel(part.id)))),
-    );
+    const genres = parts.filter((part) => part.source === 'charts');
+    const decades = parts.filter((part) => part.source === 'decades');
+    const genreLabels = await Promise.all(genres.map((part) => chartLabel(part.id)));
+    const decadeLabels = decades.map((part) => decadeLabel(part.id));
+
+    // Genres and decades narrow each other: rock with the 10s is rock from the
+    // 2010s. Only one kind picked, the lists simply add up.
+    const jobs: (() => Promise<Track[]>)[] =
+      genres.length && decades.length
+        ? genres.flatMap((genre, index) =>
+            decades.map((decade) => () => genreDecadeTracks(genre.id, genreLabels[index] as string, decade.id)),
+          )
+        : parts.map((part) => () => (part.source === 'charts' ? chartTracks(part.id) : decadeTracks(part.id)));
+    // A few at a time: a cold cache costs each list several Deezer calls.
+    const lists = await mapLimit(jobs, 3, (job) => job().catch(() => [] as Track[]));
+    const label =
+      genres.length && decades.length ? crossLabel(genreLabels, decadeLabels) : blendLabel([...genreLabels, ...decadeLabels]);
     // Round-robin, so a short list is not drowned by a long one.
-    pool = { source, variant: blendVariant(parts), label: blendLabel(labels), tracks: interleave(lists), dropped: 0 };
+    pool = { source, variant: blendVariant(parts), label, tracks: interleave(lists), dropped: 0 };
   } else if (source === 'decades') {
     const variant = requested || '1980s';
     const tracks = await decadeTracks(variant);

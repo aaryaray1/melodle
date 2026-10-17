@@ -17,6 +17,7 @@ export class AudioEngine {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private source: AudioBufferSourceNode | null = null;
+  private gain: GainNode | null = null;
   private clipStart = 0;
   private clipEnd = 0;
   private onEnded: (() => void) | null = null;
@@ -40,10 +41,14 @@ export class AudioEngine {
     if (context.state === 'suspended') await context.resume();
   }
 
-  /** Audio is requested by track id; the server resolves a fresh, unexpired URL. */
-  async load(trackId: string, signal?: AbortSignal): Promise<AudioBuffer> {
+  /**
+   * Audio is requested by track id; the server resolves a fresh, unexpired URL.
+   * `intro` asks for the song's real opening instead of the mid-song preview.
+   */
+  async load(trackId: string, signal?: AbortSignal, kind: 'preview' | 'intro' = 'preview'): Promise<AudioBuffer> {
     const context = this.ensureContext();
-    const response = await fetch(`/api/audio?track=${encodeURIComponent(trackId)}`, { signal });
+    const route = kind === 'intro' ? 'intro' : 'audio';
+    const response = await fetch(`/api/${route}?track=${encodeURIComponent(trackId)}`, { signal });
     if (!response.ok) throw new Error('This preview would not load');
     const encoded = await response.arrayBuffer();
     return context.decodeAudioData(encoded);
@@ -74,7 +79,9 @@ export class AudioEngine {
     gain.gain.setValueAtTime(1, at + Math.max(fade, duration - fade));
     gain.gain.linearRampToValueAtTime(0, at + duration);
 
-    source.start(at, clip.start, duration);
+    // The end is a scheduled stop rather than start()'s duration argument, because a
+    // stop time can be moved later while the clip plays: see extend().
+    source.start(at, clip.start);
     source.stop(at + duration);
     source.onended = () => {
       if (this.source === source) {
@@ -86,9 +93,38 @@ export class AudioEngine {
     };
 
     this.source = source;
+    this.gain = gain;
     this.clipStart = at;
     this.clipEnd = at + duration;
     this.onEnded = onEnded ?? null;
+  }
+
+  /**
+   * Lets a clip that is still sounding run on to `duration` seconds in total: a
+   * skip or a wrong guess mid-play unlocks more, and the music simply keeps going.
+   * Returns false when nothing is playing (or it already ended), so there is nothing to extend.
+   */
+  extend(duration: number): boolean {
+    const context = this.context;
+    const source = this.source;
+    const gain = this.gain;
+    if (!context || !source || !gain) return false;
+    const now = context.currentTime;
+    const end = this.clipStart + duration;
+    if (now >= this.clipEnd || end <= this.clipEnd) return false;
+
+    const fade = Math.min(0.01, duration * 0.08);
+    const level = gain.gain;
+    // Drop the old fade-out; if it had begun, come back up rather than jump.
+    level.cancelScheduledValues(now);
+    level.setValueAtTime(level.value, now);
+    level.linearRampToValueAtTime(1, now + fade);
+    level.setValueAtTime(1, end - fade);
+    level.linearRampToValueAtTime(0, end);
+    // A later stop() replaces the earlier one while the source is still running.
+    source.stop(end);
+    this.clipEnd = end;
+    return true;
   }
 
   stop(): void {

@@ -90,6 +90,10 @@ export interface Me {
   party: Party | null;
   /** True when this server asks for an invite code before making an account. */
   invitesRequired: boolean;
+  /** Whether this account hears songs from their real start rather than the preview. */
+  songStart: boolean;
+  /** True for the server's admin, and for anyone at the keyboard of a development server. */
+  keysEditable: boolean;
 }
 
 export const STAGE_DURATIONS = [0.1, 0.5, 2, 8, 15] as const;

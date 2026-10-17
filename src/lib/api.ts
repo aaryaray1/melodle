@@ -1,4 +1,4 @@
-import type { Account, Me, Party, Pool, ProviderId, Rating, Stats } from '../../shared/types.ts';
+import type { Account, Me, Party, Pool, ProviderId, Rating, Stats, Track } from '../../shared/types.ts';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -40,6 +40,8 @@ export interface RoundReport {
 
 export const api = {
   me: () => request<Me>('/api/me'),
+  search: (query: string, signal?: AbortSignal) =>
+    request<{ tracks: Track[] }>(`/api/search?q=${encodeURIComponent(query)}`, { signal }),
   pool: (source: ProviderId, variant: string, signal?: AbortSignal) =>
     request<Pool>(`/api/pool?source=${source}&variant=${encodeURIComponent(variant)}`, { signal }),
 

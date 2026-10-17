@@ -104,8 +104,11 @@ and forces everyone to relink.
 **Previews are excerpts from the middle of a track, not its beginning.**
 Measured across six 80s hits: the first two seconds sit at 87-111% of the
 preview's own average loudness, so Billie Jean's quiet intro simply is not in
-the file. "Clip start" therefore means the start of the excerpt. Do not promise
-a song's intro; the audio does not exist to play.
+the file. Apple's previews measured the same. For guests, "Clip start" means the
+start of the excerpt. For signed-in players only, "Song start" cuts the real
+opening from the song's YouTube album upload (yt-dlp + ffmpeg,
+`server/lib/intro.ts`, ADR-14); Hook keeps the preview. yt-dlp is fetched fresh
+on each image build, so when YouTube breaks it, redeploy.
 
 **Deezer preview URLs expire after about fifteen minutes.** Never cache one and
 serve it later — pools are cached for hours, so the URL inside is usually dead.

@@ -147,3 +147,15 @@ function pruneProgress(day: string): void {
     // Nothing to prune if storage is unavailable.
   }
 }
+
+/** Songs already played, by artist and title, newest last. Kept so endless never repeats. */
+const PLAYED_LIMIT = 8000;
+
+export function loadPlayed(): string[] {
+  const value = read<{ keys: unknown }>('played', { keys: [] }).keys;
+  return Array.isArray(value) ? value.filter((key): key is string => typeof key === 'string') : [];
+}
+
+export function savePlayed(keys: Iterable<string>): void {
+  write('played', { keys: [...keys].slice(-PLAYED_LIMIT) });
+}

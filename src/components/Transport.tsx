@@ -8,9 +8,11 @@ interface Props {
   startMode: StartMode;
   onPlay: () => void;
   onStartMode: (mode: StartMode) => void;
+  /** Accounts with song start hear the real opening; everyone else hears the start of the preview. */
+  songStart: boolean;
 }
 
-export function Transport({ unlocked, playing, ready, solved, startMode, onPlay, onStartMode }: Props) {
+export function Transport({ unlocked, playing, ready, solved, startMode, songStart, onPlay, onStartMode }: Props) {
   const stageIndex = STAGE_DURATIONS.indexOf(unlocked as (typeof STAGE_DURATIONS)[number]);
   const label = solved ? 'Full 15 seconds' : `${unlocked}s unlocked`;
   const step = solved || stageIndex < 0 ? null : `Attempt ${stageIndex + 1} of ${STAGE_DURATIONS.length}`;
@@ -48,10 +50,10 @@ export function Transport({ unlocked, playing, ready, solved, startMode, onPlay,
           type="button"
           className={startMode === 'opening' ? 'start-pick start-pick-on' : 'start-pick'}
           aria-pressed={startMode === 'opening'}
-          title="Start of the 30 second preview"
+          title={songStart ? 'The very start of the song' : 'Start of the 30 second preview'}
           onClick={() => onStartMode('opening')}
         >
-          Clip start
+          {songStart ? 'Song start' : 'Clip start'}
         </button>
         <button
           type="button"

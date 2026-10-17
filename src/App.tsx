@@ -11,7 +11,7 @@ import { Transport } from './components/Transport.tsx';
 import { Waveform } from './components/Waveform.tsx';
 import { useAccount } from './game/useAccount.ts';
 import { useGame } from './game/useGame.ts';
-import { MAX_DIFFICULTY, nextUnlock, shareText } from './game/rules.ts';
+import { isGuessed, MAX_DIFFICULTY, nextUnlock, shareText } from './game/rules.ts';
 import { api } from './lib/api.ts';
 import { installHint } from './lib/platform.ts';
 
@@ -183,9 +183,16 @@ export default function App() {
           ready={Boolean(game.clip)}
           solved={finished}
           startMode={game.settings.startMode}
+          songStart={Boolean(account.me?.songStart)}
           onPlay={game.play}
           onStartMode={game.setStartMode}
         />
+
+        {game.introMissing && !game.clipError ? (
+          <p className="notice" role="status">
+            No clean copy of this song&apos;s start turned up, so this round plays the preview.
+          </p>
+        ) : null}
 
         {game.clipError ? (
           <p className="notice notice-problem" role="status">
@@ -198,7 +205,12 @@ export default function App() {
 
         {round && !finished ? (
           <>
-            <GuessBar tracks={game.pool?.tracks ?? []} disabled={!game.clip} onGuess={game.guess} />
+            <GuessBar
+              tracks={game.pool?.tracks ?? []}
+              disabled={!game.clip}
+              isGuessed={(track) => isGuessed(round.guesses, track)}
+              onGuess={game.guess}
+            />
             <div className="skip-row">
               <button type="button" className="button" onClick={game.skip} disabled={!game.clip}>
                 {upcoming ? `Skip, unlock ${upcoming}s` : 'Skip the last one'}
@@ -206,16 +218,20 @@ export default function App() {
               {game.settings.daily ? null : (
                 <span className="difficulty">
                   <span className="muted">Difficulty</span>
-                  <span
-                    className="difficulty-pips"
-                    role="img"
-                    aria-label={`Difficulty ${game.settings.difficulty} of ${MAX_DIFFICULTY}`}
-                  >
+                  <span className="difficulty-pips" role="group" aria-label="Difficulty">
                     {Array.from({ length: MAX_DIFFICULTY }, (_, index) => (
-                      <span
+                      <button
                         key={index}
-                        className={index < game.settings.difficulty ? 'difficulty-pip difficulty-pip-on' : 'difficulty-pip'}
-                      />
+                        type="button"
+                        className="difficulty-pip-button"
+                        aria-label={`Set difficulty ${index + 1}`}
+                        aria-pressed={index + 1 === game.settings.difficulty}
+                        onClick={() => game.setDifficulty(index + 1)}
+                      >
+                        <span
+                          className={index < game.settings.difficulty ? 'difficulty-pip difficulty-pip-on' : 'difficulty-pip'}
+                        />
+                      </button>
                     ))}
                   </span>
                   <button
@@ -280,23 +296,26 @@ export default function App() {
       </footer>
 
       <Sheet open={sourcesOpen} title="Where your songs come from" onClose={() => setSourcesOpen(false)}>
-        <SourceSheet
-          me={account.me}
-          source={game.settings.source as ProviderId}
-          variant={game.settings.variant}
-          signedIn={account.signedIn}
-          onChoose={(source, variant) => {
-            game.chooseSource(source, variant);
-            setSourcesOpen(false);
-          }}
-          onConnectLastfm={connectLastfm}
-          onDisconnect={disconnect}
-          onSaved={account.refresh}
-          onOpenAccount={() => {
-            setSourcesOpen(false);
-            setAccountOpen(true);
-          }}
-        />
+        {/* Mounted only while open, so the picker always starts from what is playing. */}
+        {sourcesOpen ? (
+          <SourceSheet
+            me={account.me}
+            source={game.settings.source as ProviderId}
+            variant={game.settings.variant}
+            signedIn={account.signedIn}
+            onChoose={(source, variant) => {
+              game.chooseSource(source, variant);
+              setSourcesOpen(false);
+            }}
+            onConnectLastfm={connectLastfm}
+            onDisconnect={disconnect}
+            onSaved={account.refresh}
+            onOpenAccount={() => {
+              setSourcesOpen(false);
+              setAccountOpen(true);
+            }}
+          />
+        ) : null}
       </Sheet>
 
       <Sheet open={statsOpen} title="Your record" onClose={() => setStatsOpen(false)}>

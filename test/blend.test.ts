@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { blendLabel, blendVariant, MAX_BLEND, parseBlend, selectionOf, toggleSelection } from '../shared/blend.ts';
+import { blendLabel, blendVariant, crossLabel, MAX_BLEND, parseBlend, selectionOf } from '../shared/blend.ts';
 
 test('a blend variant round-trips and is the same whatever order it was picked in', () => {
   const variant = blendVariant([
@@ -40,17 +40,13 @@ test('the current pick becomes the starting selection', () => {
   assert.deepEqual(selectionOf('lastfm', 'top:overall'), []);
 });
 
-test('toggling adds and removes, never empties the selection, and stops at the cap', () => {
-  const rock = { source: 'charts' as const, id: '152' };
-  const eighties = { source: 'decades' as const, id: '1980s' };
-  assert.deepEqual(toggleSelection([rock], eighties), [rock, eighties]);
-  assert.deepEqual(toggleSelection([rock, eighties], rock), [eighties]);
-  assert.deepEqual(toggleSelection([rock], rock), [rock]);
-  const full = Array.from({ length: MAX_BLEND }, (_, index) => ({ source: 'charts' as const, id: String(index) }));
-  assert.equal(toggleSelection(full, eighties).length, MAX_BLEND);
-});
-
 test('a blend label lists a few picks and counts the rest', () => {
   assert.equal(blendLabel(['Rock', 'The 80s']), 'Rock + The 80s');
   assert.equal(blendLabel(['Rock', 'Pop', 'The 80s', 'The 90s', 'Jazz']), 'Rock + Pop + 3 more');
+});
+
+test('genres within decades read as one narrowed list', () => {
+  assert.equal(crossLabel(['Rock'], ['The 10s']), 'Rock · The 10s');
+  assert.equal(crossLabel(['Rock', 'Metal'], ['The 10s', 'The 20s']), 'Rock + Metal · The 10s + The 20s');
+  assert.equal(crossLabel(['Rock', 'Metal', 'Dance', 'Electro'], ['The 10s']), 'Rock + Metal + 2 more · The 10s');
 });

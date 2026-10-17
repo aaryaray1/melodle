@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import type { Track } from '../shared/types.ts';
-import { buildIndex, MAX_RESULTS, searchTracks } from '../src/game/search.ts';
+import { buildIndex, MAX_RESULTS, mergeResults, searchTracks } from '../src/game/search.ts';
 
 function make(title: string, artist: string): Track {
   return {
@@ -108,4 +108,18 @@ test('the list stops at the cap however broad the query', () => {
 
 test('an empty pool searches cleanly', () => {
   assert.deepEqual(searchTracks(buildIndex([]), 'anything'), []);
+});
+
+test('worldwide results lead, pool-only matches follow, and nothing is listed twice', () => {
+  const remote = [make('Blinding Lights', 'The Weeknd'), make('Heartless', 'The Weeknd'), make('Blinding Lights', 'The Weeknd')];
+  remote[2] = { ...(remote[2] as Track), id: 'deezer:live-version' };
+  const local = [make('Starboy', 'The Weeknd'), make('Blinding Lights', 'The Weeknd')];
+  const merged = mergeResults(remote, local).map((track) => track.title);
+  assert.deepEqual(merged, ['Blinding Lights', 'Heartless', 'Starboy']);
+});
+
+test('the merged list stops at the cap', () => {
+  const remote = Array.from({ length: 30 }, (_, n) => make(`Remote ${n}`, 'A'));
+  const local = Array.from({ length: 30 }, (_, n) => make(`Local ${n}`, 'B'));
+  assert.equal(mergeResults(remote, local).length, MAX_RESULTS);
 });

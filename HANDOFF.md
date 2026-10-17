@@ -55,6 +55,43 @@ About 6,400 lines across `server/`, `src/`, `shared/`. 70 tests, all passing.
   37 kB) or a pixel-note stand-in. The reveal shows the full cover at 128px
   (96px on phones), framed green for a win and red for a loss. Checked live:
   "love" lists 28 songs, Beyoncé 15 of 15 in a six-list mix.
+- **One picker model** (`shared/selection.ts`): genres and decades mix; a
+  history choice or party stands alone and toggles off again; Global hits means
+  "no genre filter" and is lit whenever no genre is picked. The sheet mounts
+  only while open, so it always starts from what is playing.
+- **Genres narrow decades** (`server/providers/crossed.ts`): rock with the 10s
+  is rock from the 2010s, every genre x decade pair, merged round-robin. Built
+  from playlists whose title names the genre and that one decade (no other).
+  Deezer's editorial ones are trusted; users' ones only top up and each song
+  must pass a release-year check (`yearFits`: never before the decade; after it
+  only from the 2000s on, and for older decades not in the very next decade,
+  since later dates there are reissues). Sampled: 2010s/2020s pairs 20/20 in
+  decade. Cold build of a pair ~30s, then cached.
+- **Deezer rate window** (`RateWindow` in `server/lib/http.ts`): 40 calls per
+  5s, plus a retry on Deezer's 200-with-quota-error. Without it, bigger pools
+  and date checks silently emptied lists.
+- **Persistent caches** (`server/lib/diskcache.ts`, table `cache`): song lists
+  (charts 6h, decades and pairs 24h) and release years (a year) survive
+  deploys. Empty results are never kept.
+- **Bigger pools:** global 767, 80s 481 (were 406 and 302).
+- **No repeats:** endless remembers played songs by artist+title in
+  localStorage (8000 max) and picks unplayed ones, band first, then anywhere in
+  the pool; it starts over only when everything is played. 40 rounds from a
+  149-song pool, no repeat. Per device, not per account.
+- **Search reaches all of Deezer** (`/api/search`, cached an hour): Deezer's
+  order first, pool-only matches after, one entry per song.
+- **Headings are Jersey 10:** Pixelify Sans drew 2, 5 and 8 almost alike.
+- **Clip start still cannot be a song's real opening.** Measured Apple previews
+  too (Teen Spirit, Billie Jean, Hotel California...): first 3s within ~1 dB of
+  the clip's average, so they are mid-song like Deezer's. See next steps.
+- **Pick, then guess.** A click or Enter on a result only selects it (shown in
+  the field with its cover); Guess or a second Enter sends it. Songs already
+  guessed this round (by artist+title, `isGuessed`) are listed, tagged
+  "Guessed", aria-disabled and refused by `useGame.guess` as well.
+- **Skipping mid-clip keeps playing:** `AudioEngine.extend` moves the scheduled
+  stop and the fade-out later while the clip sounds (start() no longer takes a
+  duration, so the end stays movable); a skip or wrong guess calls it.
+- **Difficulty pips are buttons:** tap one to set the level; the lock remains.
 - Verified by driving the deployed build in headless Chromium, twice from a cold
   restart: every difficulty rule, the lock, the reds at each level, the purple
   song of the day, a genre+decade mix, fonts loading, no overflow at 390px.
@@ -83,8 +120,12 @@ Android 6+, `INTERNET` as its only real permission.
 
 ## Credentials
 
-`.env` is gitignored. Keys go in through the app's own setup panel, which writes
-`.env` and only answers to localhost — not by hand.
+`.env` is gitignored. Keys go in through the app's own setup panel. On a
+development server that writes `.env` and answers only to localhost. On the
+deployed server it answers only to an admin (`ADMIN_USERS=abyss`, else the
+first account) and stores keys sealed in the `server_keys` table, which then
+outranks `.env` at startup (`server/lib/keys.ts`). Every user then links their
+own Last.fm, Spotify or YouTube account with the Link buttons.
 
 | Key | State |
 |---|---|
@@ -109,6 +150,12 @@ would rather.
 3. **Verify the APK on a phone**, then decide whether a release-signed build is
    worth it.
 4. Optional: YouTube Music verification, a release keystore.
+5. **Song start from YouTube is live** (ADR-14), for the accounts in
+   `SONG_START_USERS` only (`abyss,NotKloudie`; empty would mean every signed-in
+   account). `/me` reports `songStart`, so everyone else sees "Clip start". Verified: nine known openings
+   right by loudness, 12/12 chart songs fetched through the real route in 7-9s,
+   about 1 transient failure in 22 (falls back to the preview, says so). Next
+   ready in ~0.3s thanks to prefetch. If YouTube breaks yt-dlp, redeploy.
 
 ## Sharing it
 
@@ -116,7 +163,7 @@ would rather.
   shortcut runs it at logon. Log: `%LOCALAPPDATA%\Melodle\server.log`.
 - `scripts/share.cmd` opens a Cloudflare quick tunnel for friends who are not on
   the Wi-Fi. New address each run, on demand only.
-- `INVITE_CODE` in `.env` is set, so account creation needs it. Clear it to go
+- `INVITE_CODE` in `.env` is `blackpink` (case-insensitive), so account creation needs it. Clear it to go
   back to open sign-up.
 - iPhones: open the address in Safari, Share, Add to Home Screen.
 
@@ -136,8 +183,8 @@ only express, run by plain `node` (Node 24 strips the types). 184 MB, ~30 MB RAM
 Hashed assets are served as precompressed brotli/gzip with a one-year immutable
 cache: 280 kB of client down to 75 kB on the wire.
 
-**Public at https://eternity-and-epilogue.tailc19105.ts.net (2026-10-10).**
-Tailscale Funnel (`tailscale funnel --bg 8787`, persisted by tailscaled, operator
+**Public at https://melodle.tailc19105.ts.net (2026-10-10).**
+Tailscale Funnel (machine renamed `melodle`; `tailscale funnel --bg 8787`, persisted by tailscaled, operator
 `abyss`) gives a fixed https address with a real certificate, independent of the
 home IP and the router. `PUBLIC_ORIGIN` in `.env` is that address, so session
 cookies are `Secure`: sign-in no longer sticks over the plain-http LAN address,

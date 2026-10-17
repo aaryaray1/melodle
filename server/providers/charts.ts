@@ -1,19 +1,23 @@
 import type { Track, VariantOption } from '../../shared/types.ts';
 import { TtlCache } from '../lib/cache.ts';
+import { DiskCache } from '../lib/diskcache.ts';
 import { fetchJson } from '../lib/http.ts';
 import { trackFromDeezer } from '../lib/preview.ts';
 import { addPlaylistTracks, editorialPlaylists } from './editorial.ts';
 
 const genreCache = new TtlCache<VariantOption[]>(24 * 60 * 60 * 1000, 4);
-const chartCache = new TtlCache<Track[]>(60 * 60 * 1000, 40);
+// Charts move daily; six hours keeps them current without rebuilding on every deploy.
+const chartCache = new DiskCache<Track[]>('chart', 6 * 60 * 60 * 1000, (tracks) => tracks.length > 0);
 
 /** The chart itself is 100 songs; editorial playlists for the genre widen it to this. */
-const MAX_TRACKS = 500;
-const MAX_PLAYLISTS = 6;
+const MAX_TRACKS = 1200;
+const MAX_PLAYLISTS = 14;
 
 function playlistQueries(genreId: string, name: string): string[] {
-  if (genreId === '0') return ['top hits', 'global hits', 'hits', 'pop hits', 'party hits', 'viral hits'];
-  return [`${name} hits`, `best of ${name}`, name, `${name} classics`];
+  if (genreId === '0') {
+    return ['top hits', 'global hits', 'hits', 'pop hits', 'party hits', 'viral hits', 'hits 2025', 'hits 2024', 'summer hits', 'throwback hits', 'all time hits'];
+  }
+  return [`${name} hits`, `best of ${name}`, name, `${name} classics`, `${name} essentials`, `${name} anthems`, `new ${name}`];
 }
 
 const GENRE_ORDER = ['0', '132', '116', '152', '113', '165', '85', '106', '466', '129', '144', '464'];

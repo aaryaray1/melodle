@@ -1,5 +1,5 @@
 import type { Track } from '../../shared/types.ts';
-import { normalize, similarity } from '../../shared/text.ts';
+import { normalize, similarity, trackKey } from '../../shared/text.ts';
 
 export interface Searchable {
   track: Track;
@@ -100,4 +100,22 @@ export function searchTracks(entries: Searchable[], query: string): Track[] {
   for (const { entry } of rest) take(entry);
 
   return picked;
+}
+
+/**
+ * Every song on Deezer that matches, not just the pool. Deezer's own order leads,
+ * so the list does not give away which songs are in play; pool matches Deezer
+ * did not return follow. One entry per song, whatever album it came from.
+ */
+export function mergeResults(remote: Track[], local: Track[]): Track[] {
+  const merged: Track[] = [];
+  const seen = new Set<string>();
+  for (const track of [...remote, ...local]) {
+    const key = trackKey(track);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(track);
+    if (merged.length >= MAX_RESULTS) break;
+  }
+  return merged;
 }

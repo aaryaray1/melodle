@@ -25,7 +25,8 @@
 
   /* Arcade type: a pixel marquee, pixel headings, a terminal for everything else. */
   --marquee: 'Press Start 2P', 'Courier New', monospace;
-  --display: 'Pixelify Sans', 'Trebuchet MS', sans-serif;
+  /* Pixelify's 2, 5 and 8 were near identical; Jersey 10 keeps them apart. */
+  --display: 'Jersey 10', 'Trebuchet MS', sans-serif;
   --text: 'VT323', 'Courier New', monospace;
 
   /* VT323 sits small on its body, so the scale runs a size up from a sans. */

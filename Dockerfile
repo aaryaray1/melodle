@@ -23,6 +23,14 @@ RUN npm run build && rm -f dist/assets/*.map
 FROM node:24-alpine
 WORKDIR /app
 
+# Song starts: yt-dlp finds a song's album upload on YouTube and ffmpeg cuts its
+# first seconds. yt-dlp is fetched fresh on every build because YouTube changes
+# often and old releases stop working; it runs YouTube's player code with the
+# node already in this image.
+RUN apk add --no-cache python3 ffmpeg \
+  && wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+  && chmod +x /usr/local/bin/yt-dlp
+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 

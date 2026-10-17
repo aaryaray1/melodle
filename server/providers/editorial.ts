@@ -13,36 +13,51 @@ interface DeezerPlaylist {
 export interface PlaylistSearch {
   queries: string[];
   maxPlaylists: number;
-  /** When given, a playlist only counts if its own title matches. */
-  belongs?: RegExp;
+  /** A playlist only counts if its own title matches every one of these. */
+  belongs?: RegExp[];
+  /** ...and none of these. */
+  rejects?: RegExp[];
   minTracks?: number;
 }
 
-/**
- * Deezer's own editors, not users: a user playlist called "80s hits" is as
- * likely to be one person's deep cuts as the decade's hits.
- */
-export async function editorialPlaylists(search: PlaylistSearch): Promise<number[]> {
-  const chosen: number[] = [];
+export interface FoundPlaylists {
+  /** Deezer's own editors: a user playlist called "80s hits" may be one person's deep cuts. */
+  editorial: number[];
+  /** Everyone else's, kept apart as a fallback for pairs the editors never made. */
+  community: number[];
+}
+
+/** "80's Hip-Hop" names the 80s: apostrophes come out before any title is matched. */
+export function plainTitle(title: string): string {
+  return title.replace(/['’`]/g, '');
+}
+
+export async function findPlaylists(search: PlaylistSearch): Promise<FoundPlaylists> {
+  const found: FoundPlaylists = { editorial: [], community: [] };
   const seen = new Set<number>();
 
   for (const query of search.queries) {
-    if (chosen.length >= search.maxPlaylists) break;
-    const found = await fetchJson<{ data?: DeezerPlaylist[] }>(
-      `https://api.deezer.com/search/playlist?limit=10&q=${encodeURIComponent(query)}`,
+    if (found.editorial.length >= search.maxPlaylists) break;
+    const page = await fetchJson<{ data?: DeezerPlaylist[] }>(
+      `https://api.deezer.com/search/playlist?limit=25&q=${encodeURIComponent(query)}`,
     ).catch(() => ({ data: [] as DeezerPlaylist[] }));
 
-    for (const playlist of found.data ?? []) {
-      const title = playlist.title ?? '';
-      const editorial = /deezer/i.test(playlist.user?.name ?? '');
-      if (!editorial || (playlist.nb_tracks ?? 0) < (search.minTracks ?? 40)) continue;
-      if ((search.belongs && !search.belongs.test(title)) || seen.has(playlist.id)) continue;
+    for (const playlist of page.data ?? []) {
+      const title = plainTitle(playlist.title ?? '');
+      if ((playlist.nb_tracks ?? 0) < (search.minTracks ?? 40) || seen.has(playlist.id)) continue;
+      if (search.belongs && !search.belongs.every((pattern) => pattern.test(title))) continue;
+      if (search.rejects?.some((pattern) => pattern.test(title))) continue;
       seen.add(playlist.id);
-      chosen.push(playlist.id);
-      if (chosen.length >= search.maxPlaylists) break;
+      const editorial = /deezer/i.test(playlist.user?.name ?? '');
+      if (editorial && found.editorial.length < search.maxPlaylists) found.editorial.push(playlist.id);
+      else if (!editorial && found.community.length < search.maxPlaylists) found.community.push(playlist.id);
     }
   }
-  return chosen;
+  return found;
+}
+
+export async function editorialPlaylists(search: PlaylistSearch): Promise<number[]> {
+  return (await findPlaylists(search)).editorial;
 }
 
 /** Appends the playable, not-yet-seen songs of each playlist, up to `max` in all. */

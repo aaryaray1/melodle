@@ -93,3 +93,23 @@ test('a whole preview still streams through intact', async (t) => {
   assert.equal(response.headers.get('content-type'), 'audio/mpeg');
   assert.ok(body.byteLength > 100_000, `expected a real mp3, got ${body.byteLength} bytes`);
 });
+
+test('a development server says its keys can be edited from the page', async () => {
+  const response = await fetch(`${base}/api/me`);
+  const me = (await response.json()) as { keysEditable?: boolean };
+  assert.equal(me.keysEditable, true);
+});
+
+test('search reaches all of Deezer, not just a pool, with covers', async () => {
+  const response = await fetch(`${base}/api/search?q=${encodeURIComponent('blinding lights')}`);
+  assert.equal(response.status, 200);
+  const { tracks } = (await response.json()) as { tracks: { title: string; artist: string; artwork?: string }[] };
+  const hit = tracks.find((track) => /blinding lights/i.test(track.title) && /weeknd/i.test(track.artist));
+  assert.ok(hit, 'found worldwide');
+  assert.ok(hit.artwork, 'with a cover');
+});
+
+test('search ignores a query too short to mean anything', async () => {
+  const { tracks } = (await (await fetch(`${base}/api/search?q=a`)).json()) as { tracks: unknown[] };
+  assert.deepEqual(tracks, []);
+});

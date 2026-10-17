@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import type { Request } from 'express';
 import { env, isPlausibleKey, redirectUri, saveCredentials } from '../lib/env.ts';
+import { canEditKeys, storeKeys } from '../lib/keys.ts';
 import { UpstreamError } from '../lib/http.ts';
 
 const FIELDS: Record<string, string[]> = {
@@ -9,20 +9,6 @@ const FIELDS: Record<string, string[]> = {
   youtube: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
 };
 
-/**
- * Typing keys into the page writes them to .env, which is only ever appropriate
- * for the person running the server on their own machine.
- */
-function assertLocalOperator(request: Request): void {
-  if (env.isProduction) {
-    throw new UpstreamError('Editing keys from the page is disabled on a deployed server', 403);
-  }
-  const address = (request.socket.remoteAddress ?? '').replace('::ffff:', '');
-  if (address !== '127.0.0.1' && address !== '::1') {
-    throw new UpstreamError('Keys can only be changed from the machine running Melodle', 403);
-  }
-}
-
 export const setupRouter = Router();
 
 setupRouter.get('/setup/redirects', (_request, response) => {
@@ -30,7 +16,9 @@ setupRouter.get('/setup/redirects', (_request, response) => {
 });
 
 setupRouter.post('/setup/:provider', (request, response) => {
-  assertLocalOperator(request);
+  if (!canEditKeys(request)) {
+    throw new UpstreamError('Only the admin of this server can change its keys', 403);
+  }
   const fields = FIELDS[request.params.provider ?? ''];
   if (!fields) throw new UpstreamError('Unknown provider', 400);
 
@@ -43,6 +31,9 @@ setupRouter.post('/setup/:provider', (request, response) => {
     updates[field] = value;
   }
 
-  saveCredentials(updates);
+  // A development server keeps its keys in .env as it always has; a deployed one
+  // keeps them in the database, because its .env is replaced on every deploy.
+  if (env.isProduction) storeKeys(updates);
+  else saveCredentials(updates);
   response.json({ saved: true });
 });

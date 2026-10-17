@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MAX_STAGE,
   STAGE_DURATIONS,
@@ -7,16 +7,27 @@ import {
   type StartMode,
   type Track,
 } from '../../shared/types.ts';
-import { matchesTrack } from '../../shared/text.ts';
+import { matchesTrack, trackKey } from '../../shared/text.ts';
 import { AudioEngine, clipFor, WINDOW, type LoadedClip } from '../audio/engine.ts';
 import { api, ApiError } from '../lib/api.ts';
-import { loadProgress, loadSettings, saveProgress, saveSettings, type Settings } from '../lib/storage.ts';
+import {
+  loadPlayed,
+  loadProgress,
+  loadSettings,
+  savePlayed,
+  saveProgress,
+  saveSettings,
+  type Settings,
+} from '../lib/storage.ts';
 import {
   dailyTrack,
   difficultyBand,
+  freshTrack,
+  clampDifficulty,
+  guessFor,
+  isGuessed,
   nextDifficulty,
   playableTracks,
-  randomTrack,
   sourceKey,
   todayKey,
   type Guess,
@@ -41,6 +52,8 @@ export interface Game {
   round: Round | null;
   clip: LoadedClip | null;
   clipError: string | null;
+  /** True when song start was asked for but this song had none, so the preview plays. */
+  introMissing: boolean;
   day: string;
   unlocked: number;
   playing: boolean;
@@ -49,6 +62,7 @@ export interface Game {
   setDaily: (daily: boolean) => void;
   setStartMode: (mode: StartMode) => void;
   setDifficultyLocked: (locked: boolean) => void;
+  setDifficulty: (level: number) => void;
   play: () => void;
   guess: (track: Track) => void;
   skip: () => void;
@@ -64,6 +78,7 @@ export function useGame(account: AccountApi): Game {
   const [round, setRound] = useState<Round | null>(null);
   const [decoded, setDecoded] = useState<AudioBuffer | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
+  const [introMissing, setIntroMissing] = useState(false);
   const [playing, setPlaying] = useState(false);
   const day = useMemo(() => todayKey(), []);
   const key = sourceKey(settings.source as ProviderId, settings.variant);
@@ -74,6 +89,17 @@ export function useGame(account: AccountApi): Game {
   }, [settings]);
 
   const playable = useMemo(() => (pool ? playableTracks(pool.tracks, ratings) : []), [pool, ratings]);
+
+  // Every song you have been played, so endless never serves one twice until the pool runs dry.
+  const played = useRef<Set<string>>(new Set(loadPlayed()));
+  const pickEndless = useCallback(
+    (avoidId?: string) => {
+      const { track, exhausted } = freshTrack(difficultyBand(playable, settings.difficulty), playable, played.current, avoidId);
+      if (exhausted) played.current = new Set();
+      return track;
+    },
+    [playable, settings.difficulty],
+  );
 
   // Load the song list for the chosen source.
   useEffect(() => {
@@ -114,23 +140,43 @@ export function useGame(account: AccountApi): Game {
       if (answer) setRound({ answer, guesses: [], status: 'playing', daily: true });
       return;
     }
-    const answer = randomTrack(difficultyBand(playable, settings.difficulty));
+    const answer = pickEndless();
     if (answer) setRound({ answer, guesses: [], status: 'playing', daily: false });
     // Ratings must not restart a round in progress, so `playable` is read, not watched.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pool, settings.daily, key, day]);
 
+  // A song counts as played the moment its round starts, so a reload cannot bring it back.
+  const answer = round?.answer;
+  useEffect(() => {
+    if (!answer) return;
+    played.current.add(trackKey(answer));
+    savePlayed(played.current);
+  }, [answer]);
+
   // Fetch and decode the clip for the current answer.
+  // Song start plays the real opening (signed-in players only); Hook keeps the preview,
+  // where the chorus is. Any failure to find an opening falls back to the preview.
   const answerId = round?.answer.id;
+  const songStart = Boolean(account.me?.songStart);
+  const wantIntro = settings.startMode === 'opening' && songStart && Boolean(answerId?.startsWith('deezer:'));
   useEffect(() => {
     if (!answerId) return;
     const controller = new AbortController();
     setDecoded(null);
     setClipError(null);
+    setIntroMissing(false);
     engine.stop();
     setPlaying(false);
-    engine
-      .load(answerId, controller.signal)
+    const preview = () => engine.load(answerId, controller.signal);
+    const load = wantIntro
+      ? engine.load(answerId, controller.signal, 'intro').catch((problem: unknown) => {
+          if (controller.signal.aborted) throw problem;
+          setIntroMissing(true);
+          return preview();
+        })
+      : preview();
+    load
       .then((buffer) => {
         if (!controller.signal.aborted) setDecoded(buffer);
       })
@@ -139,7 +185,7 @@ export function useGame(account: AccountApi): Game {
         setClipError(error instanceof Error ? error.message : 'This preview would not load');
       });
     return () => controller.abort();
-  }, [answerId, engine]);
+  }, [answerId, engine, wantIntro]);
 
   // Re-slicing is cheap, so the toggle takes effect without fetching again.
   const clip = useMemo(
@@ -189,6 +235,8 @@ export function useGame(account: AccountApi): Game {
 
       setRound({ ...round, guesses, status });
       if (round.daily) saveProgress(key, day, { answerId: round.answer.id, guesses, status });
+      // Still guessing and the clip is sounding: let it run on to the newly unlocked length.
+      if (status === 'playing') engine.extend(STAGE_DURATIONS[Math.min(guesses.length, MAX_STAGE - 1)] as number);
       if (status !== 'playing') {
         // The song of the day is the same for everyone, so it neither uses nor moves difficulty.
         if (!round.daily) {
@@ -219,20 +267,39 @@ export function useGame(account: AccountApi): Game {
     (track: Track) => {
       const answer = round?.answer;
       if (!answer) return;
+      // The same song twice would waste a stage; the list disables it, and this refuses it too.
+      if (!round || isGuessed(round.guesses, track)) return;
       const right = track.id === answer.id || matchesTrack(track, answer);
-      settle({ outcome: right ? 'right' : 'wrong', label: `${track.title} — ${track.artist}` });
+      settle(guessFor(track, right ? 'right' : 'wrong'));
     },
-    [round?.answer, settle],
+    [round, settle],
   );
 
   const skip = useCallback(() => settle({ outcome: 'skip', label: 'Skipped' }), [settle]);
 
+  // The next song is chosen as soon as a round ends (difficulty has moved by then)
+  // and, for song start, its opening is fetched while the reveal is on screen.
+  // The fetch lands in the browser's cache, so Next finds it already there.
+  const upcoming = useRef<Track | undefined>(undefined);
+  const finishedId = round && round.status !== 'playing' ? round.answer.id : undefined;
+  const prefetchIntro = settings.startMode === 'opening' && songStart;
+  useEffect(() => {
+    upcoming.current = undefined;
+    if (!finishedId) return;
+    const { track } = freshTrack(difficultyBand(playable, settings.difficulty), playable, played.current, finishedId);
+    upcoming.current = track;
+    if (prefetchIntro && track?.id.startsWith('deezer:')) {
+      void fetch(`/api/intro?track=${encodeURIComponent(track.id)}`).catch(() => undefined);
+    }
+  }, [finishedId, playable, prefetchIntro, settings.difficulty]);
+
   const nextRound = useCallback(() => {
     if (!playable.length) return;
     setSettings((current) => (current.daily ? { ...current, daily: false } : current));
-    const answer = randomTrack(difficultyBand(playable, settings.difficulty), round?.answer.id);
+    const ready = upcoming.current;
+    const answer = ready && playable.includes(ready) ? ready : pickEndless(round?.answer.id);
     if (answer) setRound({ answer, guesses: [], status: 'playing', daily: false });
-  }, [playable, round?.answer.id, settings.difficulty]);
+  }, [pickEndless, playable.length, round?.answer.id]);
 
   const chooseSource = useCallback((source: ProviderId, variant: string) => {
     setSettings((current) => ({ ...current, source, variant }));
@@ -240,6 +307,10 @@ export function useGame(account: AccountApi): Game {
 
   const setDaily = useCallback((daily: boolean) => {
     setSettings((current) => ({ ...current, daily }));
+  }, []);
+
+  const setDifficulty = useCallback((level: number) => {
+    setSettings((current) => ({ ...current, difficulty: clampDifficulty(level) }));
   }, []);
 
   const setDifficultyLocked = useCallback((difficultyLocked: boolean) => {
@@ -260,6 +331,7 @@ export function useGame(account: AccountApi): Game {
     round,
     clip,
     clipError,
+    introMissing,
     day,
     unlocked,
     playing,
@@ -268,6 +340,7 @@ export function useGame(account: AccountApi): Game {
     setDaily,
     setStartMode,
     setDifficultyLocked,
+    setDifficulty,
     play,
     guess,
     skip,

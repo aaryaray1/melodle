@@ -37,18 +37,13 @@ export function selectionOf(source: string, variant: string): BlendPart[] {
   return [];
 }
 
-export function toggleSelection(selection: BlendPart[], part: BlendPart): BlendPart[] {
-  const has = selection.some((entry) => entry.source === part.source && entry.id === part.id);
-  if (has) {
-    return selection.length > 1
-      ? selection.filter((entry) => entry.source !== part.source || entry.id !== part.id)
-      : selection;
-  }
-  return selection.length >= MAX_BLEND ? selection : [...selection, part];
-}
-
 /** "Rock + The 80s", or "Rock + The 80s + 3 more" once it stops fitting a chip. */
 export function blendLabel(labels: string[]): string {
   if (labels.length <= 3) return labels.join(' + ');
   return `${labels.slice(0, 2).join(' + ')} + ${labels.length - 2} more`;
+}
+
+/** Genres narrowed to decades: "Rock + Metal · The 10s + The 20s". */
+export function crossLabel(genres: string[], decades: string[]): string {
+  return `${blendLabel(genres)} · ${blendLabel(decades)}`;
 }

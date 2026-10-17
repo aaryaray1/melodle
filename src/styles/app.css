@@ -267,6 +267,7 @@
 .guessbar-field {
   display: flex;
   gap: var(--gap-1);
+  position: relative;
 }
 
 .guessbar-input {
@@ -364,6 +365,43 @@
   white-space: nowrap;
 }
 
+/* A picked song waits in the field, cover and all, until Guess sends it. */
+.guessbar-field-picked .guessbar-input {
+  padding-left: 3.4rem;
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.guessbar-picked-cover {
+  position: absolute;
+  left: 0.45rem;
+  top: 50%;
+  translate: 0 -50%;
+  width: 36px;
+  height: 36px;
+  border-radius: 2px;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* Already guessed this round: still listed, so you can see it, but not pickable. */
+.guessbar-option-guessed {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.guessbar-badge {
+  margin-left: auto;
+  flex: none;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--miss);
+  border-radius: var(--radius-sm);
+  color: var(--miss);
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Stand-in for a missing cover: the album's square with a pixel note in it. */
 .cover-missing {
   display: grid;
@@ -402,7 +440,18 @@
 
 .difficulty-pips {
   display: inline-flex;
-  gap: 4px;
+}
+
+/* Each pip is a button: tap one to set the difficulty. The hit area is wider than the pip. */
+.difficulty-pip-button {
+  display: inline-grid;
+  place-items: center;
+  padding: 6px 2px;
+  border-radius: var(--radius-sm);
+}
+
+.difficulty-pip-button:hover .difficulty-pip:not(.difficulty-pip-on) {
+  background: var(--line-strong);
 }
 
 .difficulty-pip {
@@ -413,11 +462,11 @@
   transition: background-color 240ms ease;
 }
 
-.difficulty-pip:nth-child(1) { --pip: #a874ff; }
-.difficulty-pip:nth-child(2) { --pip: #c46cf5; }
-.difficulty-pip:nth-child(3) { --pip: #e95fc4; }
-.difficulty-pip:nth-child(4) { --pip: #ff5a86; }
-.difficulty-pip:nth-child(5) { --pip: #ff4a3d; }
+.difficulty-pip-button:nth-child(1) { --pip: #a874ff; }
+.difficulty-pip-button:nth-child(2) { --pip: #c46cf5; }
+.difficulty-pip-button:nth-child(3) { --pip: #e95fc4; }
+.difficulty-pip-button:nth-child(4) { --pip: #ff5a86; }
+.difficulty-pip-button:nth-child(5) { --pip: #ff4a3d; }
 
 .difficulty-pip-on {
   background: var(--pip);
@@ -1342,8 +1391,13 @@ label {
   .button,
   .guessbar-submit,
   .rate-button,
-  .difficulty-lock {
+  .difficulty-lock,
+  .difficulty-pip-button {
     min-height: 44px;
+  }
+
+  .difficulty-pip-button {
+    min-width: 28px;
   }
 
   .chip,

@@ -4,6 +4,7 @@ import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { env } from './lib/env.ts';
 import { UpstreamError } from './lib/http.ts';
+import { loadStoredKeys } from './lib/keys.ts';
 import { sessionMiddleware } from './lib/session.ts';
 import { staticSite } from './lib/static.ts';
 import { audioRouter } from './routes/audio.ts';
@@ -28,6 +29,9 @@ const CSP = [
   "frame-ancestors 'none'",
   "base-uri 'none'",
 ].join('; ');
+
+// Keys set from the page outrank .env, which a deploy rebuilds from the host.
+loadStoredKeys();
 
 export const app = express();
 

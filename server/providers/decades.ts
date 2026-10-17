@@ -1,8 +1,8 @@
 import type { Track, VariantOption } from '../../shared/types.ts';
-import { TtlCache } from '../lib/cache.ts';
+import { DiskCache } from '../lib/diskcache.ts';
 import { addPlaylistTracks, editorialPlaylists } from './editorial.ts';
 
-interface Decade {
+export interface Decade {
   id: string;
   label: string;
   queries: string[];
@@ -10,7 +10,7 @@ interface Decade {
   belongs: RegExp;
 }
 
-const DECADES: Decade[] = [
+export const DECADES: Decade[] = [
   {
     id: '1970s',
     label: 'The 70s',
@@ -49,10 +49,20 @@ const DECADES: Decade[] = [
   },
 ];
 
-const MAX_PLAYLISTS = 9;
-const MAX_TRACKS = 700;
+/** Every decade also gets these, for a pool deep enough not to repeat. */
+const MORE_QUERIES = [
+  (short: string) => `${short} essentials`,
+  (short: string) => `${short} love songs`,
+  (short: string) => `${short} one hit wonders`,
+  (short: string) => `best of the ${short}`,
+  (short: string) => `${short} anthems`,
+  (short: string) => `${short} classics`,
+];
 
-const pools = new TtlCache<Track[]>(24 * 60 * 60 * 1000, 12);
+const MAX_PLAYLISTS = 16;
+const MAX_TRACKS = 1500;
+
+const pools = new DiskCache<Track[]>('decade', 24 * 60 * 60 * 1000, (tracks) => tracks.length > 0);
 
 export const DECADE_VARIANTS: VariantOption[] = DECADES.map(({ id, label }) => ({ id, label }));
 
@@ -63,9 +73,10 @@ export function decadeLabel(variant: string): string {
 export async function decadeTracks(variant: string): Promise<Track[]> {
   const decade = DECADES.find((entry) => entry.id === variant) ?? (DECADES[1] as Decade);
   return pools.wrap(decade.id, async () => {
+    const short = decade.id.slice(2);
     const playlists = await editorialPlaylists({
-      queries: decade.queries,
-      belongs: decade.belongs,
+      queries: [...decade.queries, ...MORE_QUERIES.map((more) => more(short))],
+      belongs: [decade.belongs],
       maxPlaylists: MAX_PLAYLISTS,
     });
     return addPlaylistTracks([], playlists, MAX_TRACKS);

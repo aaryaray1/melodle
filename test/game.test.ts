@@ -4,6 +4,9 @@ import type { Track } from '../shared/types.ts';
 import {
   dailyTrack,
   difficultyBand,
+  freshTrack,
+  guessFor,
+  isGuessed,
   hash,
   MAX_DIFFICULTY,
   nextDifficulty,
@@ -14,8 +17,9 @@ import {
   todayKey,
   unlockedSeconds,
 } from '../src/game/rules.ts';
+import { trackKey } from '../shared/text.ts';
 import { isAllowedPreviewUrl } from '../server/routes/audio.ts';
-import { isPlausibleKey } from '../server/lib/env.ts';
+import { inviteAccepted, isPlausibleKey } from '../server/lib/env.ts';
 import { parseVideo } from '../server/providers/youtube.ts';
 
 const pool: Track[] = Array.from({ length: 60 }, (_, index) => ({
@@ -218,4 +222,60 @@ test('a locked difficulty never moves', () => {
   assert.equal(nextDifficulty(3, true, true), 3);
   assert.equal(nextDifficulty(MAX_DIFFICULTY, true, true), MAX_DIFFICULTY);
   assert.equal(nextDifficulty(2, false, true), 2);
+});
+
+test('the invite code ignores case and stray spaces, but nothing else', () => {
+  assert.ok(inviteAccepted('blackpink', 'blackpink'));
+  assert.ok(inviteAccepted('Blackpink', 'blackpink'), 'a phone capitalising the first letter still gets in');
+  assert.ok(inviteAccepted('  BLACKPINK ', 'blackpink'));
+  assert.ok(!inviteAccepted('blackpin', 'blackpink'));
+  assert.ok(!inviteAccepted('', 'blackpink'));
+});
+
+test('a fresh pick never repeats a played song while unplayed ones remain', () => {
+  const tracks = ranked(30);
+  const played = new Set(tracks.slice(0, 29).map(trackKey));
+  for (let i = 0; i < 20; i += 1) {
+    const { track, exhausted } = freshTrack(tracks.slice(0, 10), tracks, played);
+    assert.equal(track?.id, tracks[29]?.id, 'the only unplayed song, even outside the band');
+    assert.equal(exhausted, false);
+  }
+});
+
+test('the band is preferred while it still has unplayed songs', () => {
+  const tracks = ranked(30);
+  const played = new Set(tracks.slice(0, 5).map(trackKey));
+  for (let i = 0; i < 20; i += 1) {
+    const { track } = freshTrack(tracks.slice(0, 10), tracks, played);
+    const index = Number(track?.id.split(':')[1]);
+    assert.ok(index >= 5 && index < 10, `picked ${index}`);
+  }
+});
+
+test('the same song under another id counts as played', () => {
+  const [song] = ranked(1);
+  const reissue = { ...song, id: 'deezer:other-album' } as Track;
+  const { exhausted } = freshTrack([reissue], [reissue], new Set([trackKey(song as Track)]));
+  assert.equal(exhausted, true);
+});
+
+test('once every song is played the caller is told to start over', () => {
+  const tracks = ranked(5);
+  const { track, exhausted } = freshTrack(tracks, tracks, new Set(tracks.map(trackKey)));
+  assert.equal(exhausted, true);
+  assert.ok(track, 'still returns something to play');
+});
+
+test('a song already guessed this round is recognised, whatever album it came from', () => {
+  const [song] = ranked(1) as [Track];
+  const guesses = [guessFor(song, 'wrong')];
+  assert.ok(isGuessed(guesses, song));
+  assert.ok(isGuessed(guesses, { ...song, id: 'deezer:other-album' }), 'same artist and title');
+  assert.ok(!isGuessed(guesses, { ...song, title: 'Another Song' }));
+  assert.ok(!isGuessed([{ outcome: 'skip', label: 'Skipped' }], song), 'a skip is not a guess');
+});
+
+test('guesses saved before keys existed are still recognised by their label', () => {
+  const [song] = ranked(1) as [Track];
+  assert.ok(isGuessed([{ outcome: 'wrong', label: `${song.title} — ${song.artist}` }], song));
 });

@@ -10,7 +10,7 @@ import {
   recordRound,
   UsernameTaken,
 } from '../lib/accounts.ts';
-import { env } from '../lib/env.ts';
+import { env, inviteAccepted } from '../lib/env.ts';
 import { UpstreamError } from '../lib/http.ts';
 import { signIn, signOut } from '../lib/session.ts';
 
@@ -58,8 +58,7 @@ export const accountRouter = Router();
 accountRouter.post('/account/register', (request, response) => {
   const { username, password } = credentials(request);
   if (env.inviteCode) {
-    const offered = String(request.body?.invite ?? '').trim();
-    if (offered !== env.inviteCode) {
+    if (!inviteAccepted(String(request.body?.invite ?? ''), env.inviteCode)) {
       throw new UpstreamError('That invite code is not right. Ask whoever runs this server.', 403);
     }
   }

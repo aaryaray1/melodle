@@ -29,6 +29,16 @@ export const env = {
   audioHeaderTimeoutMs: Number(read('AUDIO_HEADER_TIMEOUT_MS') || 20_000),
   /** When set, a new account needs this code. Use it if the server is public. */
   inviteCode: read('INVITE_CODE'),
+  /** Accounts that hear songs from their real start (YouTube). Empty: every signed-in account. */
+  songStartUsers: read('SONG_START_USERS')
+    .split(',')
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean),
+  /** Usernames that may set the server's keys from the page. Empty: the first account. */
+  adminUsers: read('ADMIN_USERS')
+    .split(',')
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean),
   lastfmKey: read('LASTFM_API_KEY'),
   spotify: { id: read('SPOTIFY_CLIENT_ID'), secret: read('SPOTIFY_CLIENT_SECRET') },
   google: { id: read('GOOGLE_CLIENT_ID'), secret: read('GOOGLE_CLIENT_SECRET') },
@@ -38,6 +48,12 @@ export const hasEphemeralSecret = !read('SESSION_SECRET');
 
 export function redirectUri(provider: 'spotify' | 'youtube'): string {
   return `${env.publicOrigin.replace(/\/$/, '')}/api/auth/${provider}/callback`;
+}
+
+/** Phones capitalise the first letter of a field, so the invite code ignores case. */
+export function inviteAccepted(offered: string, expected: string): boolean {
+  const given = offered.trim().toLowerCase();
+  return given.length > 0 && given === expected.trim().toLowerCase();
 }
 
 /** Keys are opaque strings from a dashboard; anything exotic is a mistake or an attack. */
@@ -61,13 +77,18 @@ function persist(updates: Record<string, string>): void {
   writeFileSync(ENV_FILE, `${lines.join(EOL).trimStart()}${EOL}`, { mode: 0o600 });
 }
 
-/** Saves credentials typed into the setup panel, for both this process and the next. */
-export function saveCredentials(updates: Record<string, string>): void {
-  persist(updates);
+/** Puts keys into effect in this process without writing them anywhere. */
+export function applyCredentials(updates: Record<string, string>): void {
   for (const [name, value] of Object.entries(updates)) {
     process.env[name] = value;
   }
   env.lastfmKey = read('LASTFM_API_KEY');
   env.spotify = { id: read('SPOTIFY_CLIENT_ID'), secret: read('SPOTIFY_CLIENT_SECRET') };
   env.google = { id: read('GOOGLE_CLIENT_ID'), secret: read('GOOGLE_CLIENT_SECRET') };
+}
+
+/** Saves credentials typed into the setup panel to .env, for both this process and the next. */
+export function saveCredentials(updates: Record<string, string>): void {
+  persist(updates);
+  applyCredentials(updates);
 }

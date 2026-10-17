@@ -1,10 +1,28 @@
 import { STAGE_DURATIONS, type ProviderId, type Track } from '../../shared/types.ts';
+import { trackKey } from '../../shared/text.ts';
 
 export type GuessOutcome = 'right' | 'wrong' | 'skip';
 
 export interface Guess {
   outcome: GuessOutcome;
   label: string;
+  /** Artist and title of the song guessed (trackKey); absent for skips and older saves. */
+  key?: string;
+}
+
+export function guessLabel(track: Track): string {
+  return `${track.title} — ${track.artist}`;
+}
+
+export function guessFor(track: Track, outcome: 'right' | 'wrong'): Guess {
+  return { outcome, label: guessLabel(track), key: trackKey(track) };
+}
+
+/** Whether this song was already guessed this round, under any album or id. */
+export function isGuessed(guesses: Guess[], track: Track): boolean {
+  const key = trackKey(track);
+  const label = guessLabel(track);
+  return guesses.some((guess) => guess.outcome !== 'skip' && (guess.key === key || guess.label === label));
 }
 
 export type Status = 'playing' | 'won' | 'lost';
@@ -59,6 +77,25 @@ export function randomTrack(tracks: Track[], avoidId?: string): Track | undefine
   return pick;
 }
 
+/**
+ * Picks a song you have not had yet: from the difficulty band if it still has
+ * one, else from anywhere in the pool. Only when every song has been played is
+ * `exhausted` set, and the caller starts the memory over. Songs are remembered by
+ * artist and title, so the same song on another album counts as played too.
+ */
+export function freshTrack(
+  band: Track[],
+  pool: Track[],
+  played: ReadonlySet<string>,
+  avoidId?: string,
+): { track: Track | undefined; exhausted: boolean } {
+  const unplayed = (list: Track[]) => list.filter((track) => track.id !== avoidId && !played.has(trackKey(track)));
+  const fresh = unplayed(band);
+  const options = fresh.length ? fresh : unplayed(pool);
+  if (options.length) return { track: options[Math.floor(Math.random() * options.length)], exhausted: false };
+  return { track: randomTrack(band.length ? band : pool, avoidId), exhausted: true };
+}
+
 const MIN_POOL = 5;
 
 /**
@@ -72,7 +109,7 @@ export function playableTracks(tracks: Track[], ratings: Record<string, 1 | -1>)
 
 export const MAX_DIFFICULTY = 5;
 
-function clampDifficulty(level: number): number {
+export function clampDifficulty(level: number): number {
   return Number.isFinite(level) ? Math.min(Math.max(Math.round(level), 1), MAX_DIFFICULTY) : 1;
 }
 

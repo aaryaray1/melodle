@@ -160,3 +160,26 @@ toggle appeared to do nothing. Scoring whole candidate windows cannot degenerate
 — there is always a loudest one — and near-ties resolve to the later window,
 since a chorus sits later than second zero and the opening is what the other
 mode is for.
+
+## ADR-14: song starts come from YouTube, for signed-in players only
+
+Previews from both Deezer and Apple are mid-song excerpts (measured: their first
+seconds are as loud as the rest), so no licensed preview holds a song's
+opening. The owner chose YouTube for it, accepting that this is against
+YouTube's terms, on the basis that accounts need an invite code. `/api/intro`
+answers only the accounts named in `SONG_START_USERS` (every signed-in account
+when that is empty); everyone else, guests included, keeps the previews.
+
+The album version is wanted, not a music video (which often opens on a skit):
+`youtube-match.ts` prefers "Artist - Topic" uploads, else an upload whose length
+is within a few seconds of Deezer's, and refuses live, cover, remix and sped-up
+versions. `intro.ts` asks yt-dlp for the stream URL (IPv4, because the URL is
+bound to the address that asked) and has ffmpeg trim leading silence and stop
+after 20s of music: the rest is never downloaded. Two jobs at a time, killed on
+timeout, the next-best upload tried on failure, files kept on the data volume.
+
+Measured on nine songs with known openings: all nine right; Smells Like Teen
+Spirit opens at -29 dB (clean guitar) against -8 dB ten seconds in. A first
+fetch takes 6-9s, so the next song's opening is fetched while the reveal is on
+screen, which makes Next ready in about 0.3s.
+
