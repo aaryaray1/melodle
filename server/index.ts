@@ -1,6 +1,7 @@
 import { networkInterfaces } from 'node:os';
 import { env, hasEphemeralSecret } from './lib/env.ts';
 import { app } from './app.ts';
+import { warmUp } from './lib/warmup.ts';
 
 function lanAddresses(): string[] {
   const found: string[] = [];
@@ -27,4 +28,5 @@ app.listen(env.port, env.host, () => {
   if (hasEphemeralSecret) {
     console.log('[melodle] SESSION_SECRET is unset, so connections drop on restart');
   }
+  if (env.isProduction) void warmUp();
 });

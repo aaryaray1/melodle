@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Me, ProviderId, VariantOption } from '../../shared/types.ts';
 import { MAX_BLEND, type BlendPart } from '../../shared/blend.ts';
-import { draftOf, noGenre, sameTarget, targetOf, toggleHistory, toggleTag, type Draft } from '../../shared/selection.ts';
+import { draftOf, isPicked, sameTarget, targetOf, toggleHistory, toggleTag, type Draft } from '../../shared/selection.ts';
 import { api } from '../lib/api.ts';
 import { PartyPanel } from './PartyPanel.tsx';
 
@@ -185,24 +185,18 @@ function Chips({
 function PickChips({
   options,
   source,
-  selection,
-  allGenres,
+  draft,
   onToggle,
 }: {
   options: VariantOption[];
   source: BlendPart['source'];
-  selection: BlendPart[];
-  /** Global hits is lit when no genre is picked. */
-  allGenres: boolean;
+  draft: Draft;
   onToggle: (part: BlendPart) => void;
 }) {
   return (
     <div className="chips" role="group">
       {options.map((option) => {
-        const active =
-          source === 'charts' && option.id === '0'
-            ? allGenres
-            : selection.some((part) => part.source === source && part.id === option.id);
+        const active = isPicked(draft, { source, id: option.id });
         return (
           <button
             key={option.id}
@@ -272,16 +266,10 @@ export function SourceSheet({
         <header className="source-head">
           <div>
             <h3 className="source-name">Popular now</h3>
-            <p className="source-blurb">Pick genres, decades or both. Rock with the 10s means rock from the 2010s.</p>
+            <p className="source-blurb">Pick as many as you like, global hits included. Rock with the 10s means rock from the 2010s.</p>
           </div>
         </header>
-        <PickChips
-          options={me.variants.charts}
-          source="charts"
-          selection={picks}
-          allGenres={noGenre(draft)}
-          onToggle={togglePick}
-        />
+        <PickChips options={me.variants.charts} source="charts" draft={draft} onToggle={togglePick} />
       </section>
 
       <section className="source">
@@ -291,13 +279,20 @@ export function SourceSheet({
             <p className="source-blurb">The songs that defined each decade. Pick several, or narrow them with genres.</p>
           </div>
         </header>
-        <PickChips
-          options={me.variants.decades}
-          source="decades"
-          selection={picks}
-          allGenres={false}
-          onToggle={togglePick}
-        />
+        <PickChips options={me.variants.decades} source="decades" draft={draft} onToggle={togglePick} />
+      </section>
+
+      <section className="source">
+        <header className="source-head">
+          <div>
+            <h3 className="source-name">By language</h3>
+            <p className="source-blurb">
+              Songs sung in these languages, on their own or narrowed by the genres and decades above. Without one,
+              every list is English.
+            </p>
+          </div>
+        </header>
+        <PickChips options={me.languages ?? []} source="lang" draft={draft} onToggle={togglePick} />
       </section>
 
 
@@ -434,7 +429,7 @@ export function SourceSheet({
                 ? 'Nothing picked: global hits.'
                 : picks.length >= MAX_BLEND
                   ? `That's the most you can mix: ${MAX_BLEND}.`
-                  : 'Genres and decades narrow each other.'}
+                  : 'Genres, decades and languages narrow each other.'}
           </p>
           <button type="button" className="button button-primary" onClick={playDraft}>
             Play

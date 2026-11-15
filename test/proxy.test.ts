@@ -113,3 +113,20 @@ test('search ignores a query too short to mean anything', async () => {
   const { tracks } = (await (await fetch(`${base}/api/search?q=a`)).json()) as { tracks: unknown[] };
   assert.deepEqual(tracks, []);
 });
+
+test('big API answers are compressed for browsers that accept it', async () => {
+  const response = await fetch(`${base}/api/pool?source=charts&variant=0`, { headers: { 'accept-encoding': 'br, gzip' } });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-encoding'), 'br');
+  assert.match(response.headers.get('vary') ?? '', /accept-encoding/i);
+  const pool = (await response.json()) as { tracks: Record<string, unknown>[] };
+  assert.ok(pool.tracks.length > 100, 'and still decodes to the full list');
+  // The client asks for audio by track id, so the preview URL is dead weight on the wire.
+  assert.ok(pool.tracks.every((track) => !('previewUrl' in track)), 'no preview URLs in the payload');
+  assert.match(response.headers.get('cache-control') ?? '', /max-age/);
+});
+
+test('small answers and non-JSON routes are left alone', async () => {
+  const ping = await fetch(`${base}/api/ping`, { headers: { 'accept-encoding': 'br, gzip' } });
+  assert.equal(ping.headers.get('content-encoding'), null);
+});

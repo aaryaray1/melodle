@@ -4,14 +4,14 @@
  * always make the same key (and so the same song of the day).
  */
 export interface BlendPart {
-  source: 'charts' | 'decades';
+  source: 'charts' | 'decades' | 'lang';
   id: string;
 }
 
 /** Each part is its own few Deezer calls on a cold cache; this keeps the first load sane. */
-export const MAX_BLEND = 8;
+export const MAX_BLEND = 10;
 
-const PART = /^(charts:\d{1,6}|decades:\d{4}s)$/;
+const PART = /^(charts:\d{1,6}|decades:\d{4}s|lang:[a-z]{2})$/;
 
 export function parseBlend(variant: string): BlendPart[] {
   const parts: BlendPart[] = [];
@@ -33,6 +33,8 @@ export function blendVariant(parts: BlendPart[]): string {
 
 export function selectionOf(source: string, variant: string): BlendPart[] {
   if (source === 'blend') return parseBlend(variant);
+  // The old Spanish genre is the Spanish language now.
+  if (source === 'charts' && variant === '197') return parseBlend('lang:es');
   if (source === 'charts' || source === 'decades') return parseBlend(`${source}:${variant}`);
   return [];
 }
@@ -46,4 +48,12 @@ export function blendLabel(labels: string[]): string {
 /** Genres narrowed to decades: "Rock + Metal · The 10s + The 20s". */
 export function crossLabel(genres: string[], decades: string[]): string {
   return `${blendLabel(genres)} · ${blendLabel(decades)}`;
+}
+
+/** Languages, then genres, then decades: "Korean · Pop · The 10s", "Rock + Metal". */
+export function mixLabel(languages: string[], genres: string[], decades: string[]): string {
+  return [languages, genres, decades]
+    .filter((group) => group.length)
+    .map((group) => blendLabel(group))
+    .join(' · ');
 }

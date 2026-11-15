@@ -7,13 +7,18 @@ import { Reveal } from './components/Reveal.tsx';
 import { Sheet } from './components/Sheet.tsx';
 import { SourceSheet } from './components/SourceSheet.tsx';
 import { StatsSheet } from './components/StatsSheet.tsx';
+import { DifficultyControl } from './components/DifficultyControl.tsx';
+import { DifficultySheet } from './components/DifficultySheet.tsx';
+import { Dock } from './components/Dock.tsx';
+import { playLabel } from './components/PlayButton.tsx';
 import { Transport } from './components/Transport.tsx';
 import { Waveform } from './components/Waveform.tsx';
 import { useAccount } from './game/useAccount.ts';
 import { useGame } from './game/useGame.ts';
-import { isGuessed, MAX_DIFFICULTY, nextUnlock, shareText } from './game/rules.ts';
+import { isGuessed, nextUnlock, shareText } from './game/rules.ts';
 import { api } from './lib/api.ts';
 import { installHint } from './lib/platform.ts';
+import { useMediaQuery, useVisibleViewport } from './lib/viewport.ts';
 
 const CONNECT_MESSAGES: Record<string, string> = {
   denied: 'You turned that connection down. Nothing was saved.',
@@ -46,6 +51,11 @@ export default function App() {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [levelOpen, setLevelOpen] = useState(false);
+  // Phones get the one-handed layout: every control a round needs sits in a dock
+  // at the bottom of the screen, where the thumb already is.
+  const compact = useMediaQuery('(max-width: 34rem)');
+  useVisibleViewport(compact);
   const [notice, setNotice] = useState<string | null>(null);
   // The page heats with difficulty. The song of the day ignores difficulty, so it stays purple.
   const heat = game.settings.daily ? 1 : game.settings.difficulty;
@@ -64,6 +74,15 @@ export default function App() {
     setNotice(message);
     setSourcesOpen(true);
   }, []);
+
+  // The song from before a reload (or a phone dropping the tab) is back: say so, briefly.
+  const { restored } = game;
+  useEffect(() => {
+    if (!restored) return;
+    setNotice('Your previous song was loaded.');
+    const timer = window.setTimeout(() => setNotice((current) => (current === 'Your previous song was loaded.' ? null : current)), 6000);
+    return () => window.clearTimeout(timer);
+  }, [restored]);
 
   const { play } = game;
   useEffect(() => {
@@ -104,6 +123,22 @@ export default function App() {
   const upcoming = round && !finished ? nextUnlock(round.guesses.length) : null;
   const solvedStage = round?.status === 'won' ? round.guesses.length - 1 : null;
   const currentRating = round ? (account.ratings[round.answer.id] ?? 0) : 0;
+  const skipLabel = upcoming ? `Skip, unlock ${upcoming}s` : 'Skip the last one';
+
+  // On a phone the reveal is scrolled into view above the dock the moment a round ends.
+  useEffect(() => {
+    if (compact && finished) document.querySelector('.reveal')?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  }, [compact, finished]);
+
+  const difficulty = (
+    <DifficultyControl
+      level={game.settings.difficulty}
+      locked={game.settings.difficultyLocked}
+      onSet={game.setDifficulty}
+      onLock={game.setDifficultyLocked}
+      onOpen={() => setLevelOpen(true)}
+    />
+  );
 
   return (
     <div className="shell">
@@ -113,24 +148,28 @@ export default function App() {
           <button type="button" className="chip-button" onClick={() => setSourcesOpen(true)}>
             {game.pool ? game.pool.label : 'Choose your music'}
           </button>
-          <button type="button" className="icon-button" onClick={() => setStatsOpen(true)} aria-label="Your record">
-            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-              <rect x="2" y="11" width="4" height="7" rx="1.4" fill="currentColor" />
-              <rect x="8" y="6" width="4" height="12" rx="1.4" fill="currentColor" />
-              <rect x="14" y="2" width="4" height="16" rx="1.4" fill="currentColor" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className={account.signedIn ? 'icon-button icon-button-on' : 'icon-button'}
-            onClick={() => setAccountOpen(true)}
-            aria-label={account.signedIn ? `Signed in as ${account.me?.account?.username}` : 'Sign in'}
-          >
-            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-              <circle cx="10" cy="6.5" r="3.5" fill="currentColor" />
-              <path d="M2.8 18a7.2 7.2 0 0 1 14.4 0Z" fill="currentColor" />
-            </svg>
-          </button>
+          {compact ? null : (
+            <>
+              <button type="button" className="icon-button" onClick={() => setStatsOpen(true)} aria-label="Your record">
+                <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+                  <rect x="2" y="11" width="4" height="7" rx="1.4" fill="currentColor" />
+                  <rect x="8" y="6" width="4" height="12" rx="1.4" fill="currentColor" />
+                  <rect x="14" y="2" width="4" height="16" rx="1.4" fill="currentColor" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={account.signedIn ? 'icon-button icon-button-on' : 'icon-button'}
+                onClick={() => setAccountOpen(true)}
+                aria-label={account.signedIn ? `Signed in as ${account.me?.account?.username}` : 'Sign in'}
+              >
+                <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+                  <circle cx="10" cy="6.5" r="3.5" fill="currentColor" />
+                  <path d="M2.8 18a7.2 7.2 0 0 1 14.4 0Z" fill="currentColor" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -163,10 +202,21 @@ export default function App() {
         {game.poolState === 'error' ? (
           <section className="panel panel-problem">
             <p className="panel-text">{game.poolError}</p>
-            <button type="button" className="button button-primary" onClick={() => setSourcesOpen(true)}>
-              Pick another list
-            </button>
+            <div className="panel-actions">
+              <button type="button" className="button button-primary" onClick={game.retryPool}>
+                Try again
+              </button>
+              <button type="button" className="button" onClick={() => setSourcesOpen(true)}>
+                Pick another list
+              </button>
+            </div>
           </section>
+        ) : null}
+
+        {game.poolState === 'loading' && game.poolSlow ? (
+          <p className="notice" role="status">
+            Putting this list together for the first time. It can take up to a minute; after that it is instant.
+          </p>
         ) : null}
 
         <Waveform
@@ -184,13 +234,14 @@ export default function App() {
           solved={finished}
           startMode={game.settings.startMode}
           songStart={Boolean(account.me?.songStart)}
+          showPlay={!compact}
           onPlay={game.play}
           onStartMode={game.setStartMode}
         />
 
         {game.introMissing && !game.clipError ? (
           <p className="notice" role="status">
-            No clean copy of this song&apos;s start turned up, so this round plays the preview.
+            The song start isn&apos;t available this round, so it plays the preview.
           </p>
         ) : null}
 
@@ -203,7 +254,7 @@ export default function App() {
           </p>
         ) : null}
 
-        {round && !finished ? (
+        {round && !finished && !compact ? (
           <>
             <GuessBar
               tracks={game.pool?.tracks ?? []}
@@ -213,50 +264,14 @@ export default function App() {
             />
             <div className="skip-row">
               <button type="button" className="button" onClick={game.skip} disabled={!game.clip}>
-                {upcoming ? `Skip, unlock ${upcoming}s` : 'Skip the last one'}
+                {skipLabel}
               </button>
-              {game.settings.daily ? null : (
-                <span className="difficulty">
-                  <span className="muted">Difficulty</span>
-                  <span className="difficulty-pips" role="group" aria-label="Difficulty">
-                    {Array.from({ length: MAX_DIFFICULTY }, (_, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        className="difficulty-pip-button"
-                        aria-label={`Set difficulty ${index + 1}`}
-                        aria-pressed={index + 1 === game.settings.difficulty}
-                        onClick={() => game.setDifficulty(index + 1)}
-                      >
-                        <span
-                          className={index < game.settings.difficulty ? 'difficulty-pip difficulty-pip-on' : 'difficulty-pip'}
-                        />
-                      </button>
-                    ))}
-                  </span>
-                  <button
-                    type="button"
-                    className="difficulty-lock"
-                    aria-pressed={game.settings.difficultyLocked}
-                    title={game.settings.difficultyLocked ? 'Difficulty stays put' : 'Difficulty climbs as you win'}
-                    onClick={() => game.setDifficultyLocked(!game.settings.difficultyLocked)}
-                  >
-                    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-                      <rect x="3" y="7" width="10" height="8" fill="currentColor" />
-                      <path
-                        d={game.settings.difficultyLocked ? 'M5 7V5a3 3 0 0 1 6 0v2' : 'M5 7V5a3 3 0 0 1 6 0'}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                    {game.settings.difficultyLocked ? 'Locked' : 'Lock'}
-                  </button>
-                </span>
-              )}
+              {game.settings.daily ? null : difficulty}
             </div>
           </>
         ) : null}
+
+        {compact && !game.settings.daily ? <div className="difficulty-row">{difficulty}</div> : null}
 
         {round ? <GuessList guesses={round.guesses} active={!finished} /> : null}
 
@@ -269,6 +284,7 @@ export default function App() {
             rating={currentRating}
             onRate={(rating) => void account.rate(round.answer, rating)}
             onNext={game.nextRound}
+            showNext={!compact}
             onShare={() =>
               shareText({
                 label: game.pool?.label ?? '',
@@ -292,7 +308,7 @@ export default function App() {
         ) : hint === 'ios' ? (
           <p className="install-hint">Install it: tap Share, then Add to Home Screen.</p>
         ) : null}
-        Space plays the snippet. Slash jumps to search. Enter locks your guess in.
+        {compact ? null : 'Space plays the snippet. Slash jumps to search. Enter picks a song, Enter again guesses it.'}
       </footer>
 
       <Sheet open={sourcesOpen} title="Where your songs come from" onClose={() => setSourcesOpen(false)}>
@@ -316,6 +332,39 @@ export default function App() {
             }}
           />
         ) : null}
+      </Sheet>
+
+      {compact && round ? (
+        <Dock
+          guessing={!finished}
+          ready={Boolean(game.clip)}
+          playing={game.playing}
+          playLabel={playLabel(game.unlocked, finished)}
+          skipLabel={skipLabel}
+          nextLabel={round.daily ? 'Play another song' : 'Next song'}
+          tracks={game.pool?.tracks ?? []}
+          isGuessed={(track) => isGuessed(round.guesses, track)}
+          signedIn={account.signedIn}
+          onPlay={game.play}
+          onGuess={game.guess}
+          onSkip={game.skip}
+          onNext={game.nextRound}
+          onSongs={() => setSourcesOpen(true)}
+          onLevel={() => setLevelOpen(true)}
+          onRecord={() => setStatsOpen(true)}
+          onAccount={() => setAccountOpen(true)}
+        />
+      ) : null}
+
+      <Sheet open={levelOpen} title="Difficulty" onClose={() => setLevelOpen(false)}>
+        <DifficultySheet
+          level={game.settings.difficulty}
+          locked={game.settings.difficultyLocked}
+          daily={game.settings.daily}
+          onSet={game.setDifficulty}
+          onLock={game.setDifficultyLocked}
+          onDone={() => setLevelOpen(false)}
+        />
       </Sheet>
 
       <Sheet open={statsOpen} title="Your record" onClose={() => setStatsOpen(false)}>

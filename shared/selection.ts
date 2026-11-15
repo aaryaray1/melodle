@@ -2,9 +2,10 @@ import type { ProviderId } from './types.ts';
 import { blendVariant, MAX_BLEND, selectionOf, type BlendPart } from './blend.ts';
 
 /**
- * What the music picker has selected but not yet played. Genres and decades mix
- * with each other; a history source (or a party) stands alone. Every choice can
- * be switched off again, and an empty selection means global hits.
+ * What the music picker has selected but not yet played. Genres, decades and
+ * languages mix with each other (global hits is a genre pick like any other); a
+ * history source (or a party) stands alone. Every choice can be switched off
+ * again, and an empty selection means global hits.
  */
 export type Draft =
   | { kind: 'mix'; parts: BlendPart[] }
@@ -15,12 +16,13 @@ export interface Target {
   variant: string;
 }
 
-/** Global hits is no genre filter at all, so it never sits in the selection itself. */
-const isGlobalHits = (part: BlendPart) => part.source === 'charts' && part.id === '0';
+const GLOBAL_HITS: BlendPart = { source: 'charts', id: '0' };
+
+const same = (a: BlendPart, b: BlendPart) => a.source === b.source && a.id === b.id;
 
 export function draftOf(source: ProviderId, variant: string): Draft {
   if (source === 'charts' || source === 'decades' || source === 'blend') {
-    return { kind: 'mix', parts: selectionOf(source, variant).filter((part) => !isGlobalHits(part)) };
+    return { kind: 'mix', parts: selectionOf(source, variant) };
   }
   return { kind: 'history', source, variant };
 }
@@ -30,27 +32,26 @@ export function toggleHistory(draft: Draft, source: ProviderId, variant: string)
   return already ? { kind: 'mix', parts: [] } : { kind: 'history', source, variant };
 }
 
-/** Whether the global hits chip is lit: no genre picked, whatever the decades. */
-export function noGenre(draft: Draft): boolean {
-  return draft.kind === 'mix' && !draft.parts.some((part) => part.source === 'charts');
+export function toggleTag(draft: Draft, part: BlendPart): Draft {
+  if (draft.kind === 'history') return { kind: 'mix', parts: [part] };
+  if (draft.parts.some((entry) => same(entry, part))) {
+    return { kind: 'mix', parts: draft.parts.filter((entry) => !same(entry, part)) };
+  }
+  return draft.parts.length >= MAX_BLEND ? draft : { kind: 'mix', parts: [...draft.parts, part] };
 }
 
-export function toggleTag(draft: Draft, part: BlendPart): Draft {
-  // Tapping global hits clears the genres; any decades stay.
-  if (isGlobalHits(part)) {
-    return { kind: 'mix', parts: draft.kind === 'mix' ? draft.parts.filter((entry) => entry.source !== 'charts') : [] };
-  }
-  if (draft.kind === 'history') return { kind: 'mix', parts: [part] };
-  const has = draft.parts.some((entry) => entry.source === part.source && entry.id === part.id);
-  if (has) return { kind: 'mix', parts: draft.parts.filter((entry) => entry.source !== part.source || entry.id !== part.id) };
-  return draft.parts.length >= MAX_BLEND ? draft : { kind: 'mix', parts: [...draft.parts, part] };
+/** Whether a chip is lit. Global hits is also lit when nothing at all is picked, since that is what plays. */
+export function isPicked(draft: Draft, part: BlendPart): boolean {
+  if (draft.kind !== 'mix') return false;
+  if (draft.parts.some((entry) => same(entry, part))) return true;
+  return draft.parts.length === 0 && same(part, GLOBAL_HITS);
 }
 
 export function targetOf(draft: Draft): Target {
   if (draft.kind === 'history') return { source: draft.source, variant: draft.variant };
   const [only] = draft.parts;
   if (!only) return { source: 'charts', variant: '0' };
-  if (draft.parts.length === 1) return { source: only.source, variant: only.id };
+  if (draft.parts.length === 1 && only.source !== 'lang') return { source: only.source, variant: only.id };
   return { source: 'blend', variant: blendVariant(draft.parts) };
 }
 

@@ -19,8 +19,10 @@ import { canHearSongStart } from '../lib/intro.ts';
 import { canEditKeys } from '../lib/keys.ts';
 import { partyFor } from '../lib/parties.ts';
 import { interleave, partyTracks } from '../providers/party.ts';
-import { blendLabel, blendVariant, crossLabel, parseBlend } from '../../shared/blend.ts';
-import { genreDecadeTracks } from '../providers/crossed.ts';
+import { blendVariant, mixLabel, parseBlend } from '../../shared/blend.ts';
+import { isAlternateVersion } from '../../shared/versions.ts';
+import { facetTracks } from '../providers/facets.ts';
+import { englishOnly, LANGUAGE_VARIANTS, languageLabel } from '../providers/languages.ts';
 import { fetchJson, mapLimit } from '../lib/http.ts';
 import { TtlCache } from '../lib/cache.ts';
 import { trackFromDeezer } from '../lib/preview.ts';
@@ -90,6 +92,7 @@ catalogueRouter.get('/me', async (request, response) => {
     variants,
     stats: session.userId ? accountStats(session.userId) : null,
     ratings: session.userId ? listRatings(session.userId) : {},
+    languages: LANGUAGE_VARIANTS,
     invitesRequired: Boolean(env.inviteCode),
     keysEditable: canEditKeys(request),
     songStart: canHearSongStart(session.userId),
@@ -118,40 +121,66 @@ catalogueRouter.get('/search', async (request, response) => {
     return (payload.data ?? []).map(trackFromDeezer).filter((track): track is Track => track !== null);
   });
   response.setHeader('cache-control', 'private, max-age=300');
-  response.json({ tracks });
+  response.json({ tracks: forClient(tracks) });
 });
 
+/** The client plays audio by track id, never by URL, so the preview URL stays on the server. */
+function forClient(tracks: Track[]): Omit<Track, 'previewUrl'>[] {
+  return tracks.map((track) => {
+    const copy: Partial<Track> = { ...track };
+    delete copy.previewUrl;
+    return copy as Omit<Track, 'previewUrl'>;
+  });
+}
+
 catalogueRouter.get('/pool', async (request, response) => {
-  const source = (typeof request.query.source === 'string' ? request.query.source : 'charts') as ProviderId;
-  const requested = typeof request.query.variant === 'string' ? request.query.variant : '';
+  let source = (typeof request.query.source === 'string' ? request.query.source : 'charts') as ProviderId;
+  let requested = typeof request.query.variant === 'string' ? request.query.variant : '';
+  // The old Spanish genre is the Spanish language now.
+  if (source === 'charts' && requested === '197') {
+    source = 'blend';
+    requested = 'lang:es';
+  }
   const session = request.session;
   let pool: Pool;
 
   if (source === 'blend') {
     const parts = parseBlend(requested);
-    if (!parts.length) throw new UpstreamError('Pick at least one genre or decade', 400);
+    if (!parts.length) throw new UpstreamError('Pick at least one genre, decade or language', 400);
     const genres = parts.filter((part) => part.source === 'charts');
     const decades = parts.filter((part) => part.source === 'decades');
+    const languages = parts.filter((part) => part.source === 'lang');
     const genreLabels = await Promise.all(genres.map((part) => chartLabel(part.id)));
     const decadeLabels = decades.map((part) => decadeLabel(part.id));
+    const languageLabels = languages.map((part) => languageLabel(part.id));
 
-    // Genres and decades narrow each other: rock with the 10s is rock from the
-    // 2010s. Only one kind picked, the lists simply add up.
-    const jobs: (() => Promise<Track[]>)[] =
-      genres.length && decades.length
-        ? genres.flatMap((genre, index) =>
-            decades.map((decade) => () => genreDecadeTracks(genre.id, genreLabels[index] as string, decade.id)),
-          )
-        : parts.map((part) => () => (part.source === 'charts' ? chartTracks(part.id) : decadeTracks(part.id)));
+    // Each kind narrows the others: Korean + Pop + the 10s is K-pop from the
+    // 2010s. Several of one kind add up: Rock + Metal is both.
+    const one = <T>(list: T[]): (T | undefined)[] => (list.length ? list : [undefined]);
+    const jobs: (() => Promise<Track[]>)[] = [];
+    for (const language of one(languages)) {
+      for (const [index, genre] of one(genres).entries()) {
+        for (const decade of one(decades)) {
+          jobs.push(() =>
+            facetTracks({
+              lang: language?.id,
+              genre: genre?.id,
+              genreLabel: genre ? genreLabels[index] : undefined,
+              decade: decade?.id,
+            }),
+          );
+        }
+      }
+    }
     // A few at a time: a cold cache costs each list several Deezer calls.
     const lists = await mapLimit(jobs, 3, (job) => job().catch(() => [] as Track[]));
-    const label =
-      genres.length && decades.length ? crossLabel(genreLabels, decadeLabels) : blendLabel([...genreLabels, ...decadeLabels]);
     // Round-robin, so a short list is not drowned by a long one.
-    pool = { source, variant: blendVariant(parts), label, tracks: interleave(lists), dropped: 0 };
+    let tracks = interleave(lists);
+    if (!languages.length) tracks = await englishOnly(tracks);
+    pool = { source, variant: blendVariant(parts), label: mixLabel(languageLabels, genreLabels, decadeLabels), tracks, dropped: 0 };
   } else if (source === 'decades') {
     const variant = requested || '1980s';
-    const tracks = await decadeTracks(variant);
+    const tracks = await englishOnly(await decadeTracks(variant));
     pool = { source, variant, label: decadeLabel(variant), tracks, dropped: 0 };
   } else if (source === 'lastfm') {
     const connection = session.userId ? readConnection<{ user: string }>(session.userId, 'lastfm') : null;
@@ -192,9 +221,15 @@ catalogueRouter.get('/pool', async (request, response) => {
     pool = { source, variant, label: labelFor(variants, variant, 'Liked music'), ...resolved };
   } else {
     const variant = requested || '0';
-    const tracks = await chartTracks(variant);
+    const tracks = await englishOnly(await chartTracks(variant));
     pool = { source: 'charts', variant, label: await chartLabel(variant), tracks, dropped: 0 };
   }
+
+  // Remixes, acoustic and live takes, instrumentals and the like are never the
+  // answer, whatever the source: they are not the record people know.
+  const before = pool.tracks.length;
+  pool = { ...pool, tracks: pool.tracks.filter((track) => !isAlternateVersion(track)) };
+  pool.dropped += before - pool.tracks.length;
 
   if (pool.tracks.length < 5) {
     throw new UpstreamError(
@@ -202,5 +237,7 @@ catalogueRouter.get('/pool', async (request, response) => {
       422,
     );
   }
-  response.json(pool);
+  // Lists change every few hours at most; a reload within ten minutes need not ask again.
+  response.setHeader('cache-control', 'private, max-age=600');
+  response.json({ ...pool, tracks: forClient(pool.tracks) });
 });

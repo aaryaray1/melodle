@@ -18,7 +18,16 @@ export function Sheet({ open, title, onClose, children }: Props) {
   }, [open]);
 
   return (
-    <dialog ref={ref} className="sheet" onCancel={onClose} onClose={onClose}>
+    <dialog
+      ref={ref}
+      className="sheet"
+      onCancel={onClose}
+      onClose={onClose}
+      // A tap on the dimmed backdrop lands on the dialog itself: close, no reach for the corner needed.
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <div className="sheet-head">
         <h2 className="sheet-title">{title}</h2>
         <button type="button" className="sheet-close" onClick={onClose} aria-label="Close">

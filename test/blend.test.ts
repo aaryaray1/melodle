@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { blendLabel, blendVariant, crossLabel, MAX_BLEND, parseBlend, selectionOf } from '../shared/blend.ts';
+import { blendLabel, blendVariant, crossLabel, MAX_BLEND, mixLabel, parseBlend, selectionOf } from '../shared/blend.ts';
 
 test('a blend variant round-trips and is the same whatever order it was picked in', () => {
   const variant = blendVariant([
@@ -49,4 +49,19 @@ test('genres within decades read as one narrowed list', () => {
   assert.equal(crossLabel(['Rock'], ['The 10s']), 'Rock · The 10s');
   assert.equal(crossLabel(['Rock', 'Metal'], ['The 10s', 'The 20s']), 'Rock + Metal · The 10s + The 20s');
   assert.equal(crossLabel(['Rock', 'Metal', 'Dance', 'Electro'], ['The 10s']), 'Rock + Metal + 2 more · The 10s');
+});
+
+test('a language is a part like a genre or a decade', () => {
+  assert.deepEqual(parseBlend('lang:ko,charts:132'), [
+    { source: 'lang', id: 'ko' },
+    { source: 'charts', id: '132' },
+  ]);
+  assert.deepEqual(parseBlend('lang:korean,lang:k'), [], 'only two-letter codes');
+});
+
+test('the label reads language, then genres, then decades', () => {
+  assert.equal(mixLabel(['Korean'], ['Pop'], ['The 10s']), 'Korean · Pop · The 10s');
+  assert.equal(mixLabel([], ['Rock', 'Metal'], []), 'Rock + Metal');
+  assert.equal(mixLabel(['French', 'German'], [], ['The 80s']), 'French + German · The 80s');
+  assert.equal(mixLabel(['Spanish'], [], []), 'Spanish');
 });

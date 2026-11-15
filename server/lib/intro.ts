@@ -49,6 +49,20 @@ async function slot<T>(job: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * YouTube can start refusing this server as a bot ("Sign in to confirm you're
+ * not a bot"). That is its call, and it is respected: song starts pause for a
+ * while, so players get the preview at once instead of waiting ~12s per song
+ * for an attempt YouTube will refuse. Stored openings keep playing.
+ */
+const PAUSE_MS = Number(process.env.SONG_START_PAUSE_MS || 30 * 60 * 1000);
+let pausedUntil = 0;
+
+function isBotRefusal(problem: unknown): boolean {
+  const said = String((problem as { stderr?: string }).stderr ?? (problem as Error).message ?? '');
+  return /confirm you.?re not a bot|sign in to confirm/i.test(said);
+}
+
 async function search(song: SongFacts): Promise<VideoCandidate[]> {
   const { stdout } = await run(
     YT_DLP,
@@ -112,6 +126,7 @@ export async function introFile(deezerId: string, song: SongFacts): Promise<stri
   const miss = path.join(dir, `${deezerId}.none`);
   if (existsSync(target)) return target;
   if (existsSync(miss)) return null;
+  if (Date.now() < pausedUntil) throw new IntroUnavailable('YouTube is refusing song starts for now');
 
   const pending = inflight.get(deezerId);
   if (pending) return pending;
@@ -132,8 +147,10 @@ export async function introFile(deezerId: string, song: SongFacts): Promise<stri
           void prune().catch(() => undefined);
           return target;
         } catch (problem) {
-          lastProblem = problem;
           await rm(`${target}.part`, { force: true });
+          // Refused as a bot: every other upload will be too.
+          if (isBotRefusal(problem)) throw problem;
+          lastProblem = problem;
         }
       }
       throw lastProblem;
@@ -147,6 +164,10 @@ export async function introFile(deezerId: string, song: SongFacts): Promise<stri
         ?.replace(/https?:\/\/\S+/g, '<url>')
         .slice(0, 160);
       console.error('[melodle] song start failed for', deezerId, code ?? '', said ?? '');
+      if (isBotRefusal(problem)) {
+        pausedUntil = Date.now() + PAUSE_MS;
+        console.error(`[melodle] YouTube is refusing song starts; paused for ${Math.round(PAUSE_MS / 60000)} min`);
+      }
       throw new IntroUnavailable(code === 'ENOENT' ? 'yt-dlp or ffmpeg is not installed' : 'fetch failed');
     }
   }).finally(() => inflight.delete(deezerId));

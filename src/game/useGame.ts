@@ -13,12 +13,15 @@ import { api, ApiError } from '../lib/api.ts';
 import {
   loadPlayed,
   loadProgress,
+  loadRound,
   loadSettings,
   savePlayed,
   saveProgress,
+  saveRound,
   saveSettings,
   type Settings,
 } from '../lib/storage.ts';
+import { resumable } from './resume.ts';
 import {
   dailyTrack,
   difficultyBand,
@@ -26,6 +29,7 @@ import {
   clampDifficulty,
   guessFor,
   isGuessed,
+  knownTracks,
   nextDifficulty,
   playableTracks,
   sourceKey,
@@ -35,6 +39,9 @@ import {
 } from './rules.ts';
 import type { AccountApi } from './useAccount.ts';
 
+/** The longest a song start may keep a player waiting before the preview plays instead. */
+const INTRO_PATIENCE_MS = 12_000;
+
 const DEFAULTS: Settings = { source: 'charts', variant: '0', daily: true, startMode: 'opening', difficulty: 1, difficultyLocked: false };
 
 export interface Round {
@@ -42,6 +49,8 @@ export interface Round {
   guesses: Guess[];
   status: Status;
   daily: boolean;
+  /** The list it was started from, so a list change starts a new round and a reload does not. */
+  key: string;
 }
 
 export interface Game {
@@ -54,11 +63,16 @@ export interface Game {
   clipError: string | null;
   /** True when song start was asked for but this song had none, so the preview plays. */
   introMissing: boolean;
+  /** True when the round on screen was brought back from before a reload. */
+  restored: boolean;
+  /** True once a list has been loading long enough to deserve an explanation. */
+  poolSlow: boolean;
   day: string;
   unlocked: number;
   playing: boolean;
   engine: AudioEngine;
   chooseSource: (source: ProviderId, variant: string) => void;
+  retryPool: () => void;
   setDaily: (daily: boolean) => void;
   setStartMode: (mode: StartMode) => void;
   setDifficultyLocked: (locked: boolean) => void;
@@ -75,20 +89,41 @@ export function useGame(account: AccountApi): Game {
   const [pool, setPool] = useState<Pool | null>(null);
   const [poolState, setPoolState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [poolError, setPoolError] = useState<string | null>(null);
-  const [round, setRound] = useState<Round | null>(null);
+  const day = useMemo(() => todayKey(), []);
+  const key = sourceKey(settings.source as ProviderId, settings.variant);
+  // The round in progress before the last reload, if it is this list's and still going.
+  const [round, setRound] = useState<Round | null>(() => {
+    const saved = resumable(loadRound(), { key, day, daily: settings.daily, now: Date.now() });
+    return saved ? { answer: saved.answer, guesses: saved.guesses, status: saved.status, daily: saved.daily, key } : null;
+  });
+  const [restored] = useState(() => round !== null);
+  const [poolSlow, setPoolSlow] = useState(false);
+  const [poolAttempt, setPoolAttempt] = useState(0);
   const [decoded, setDecoded] = useState<AudioBuffer | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
   const [introMissing, setIntroMissing] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const day = useMemo(() => todayKey(), []);
-  const key = sourceKey(settings.source as ProviderId, settings.variant);
   const { ratings, report } = account;
+
+  // Written on every change, read back on the next load: see resume.ts.
+  useEffect(() => {
+    saveRound(round ? { ...round, day, savedAt: Date.now() } : null);
+  }, [round, day]);
 
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
 
-  const playable = useMemo(() => (pool ? playableTracks(pool.tracks, ratings) : []), [pool, ratings]);
+  // Curated lists (charts, decades, mixes) only ever ask for songs people know:
+  // knownTracks drops the niche tail below the popularity floor, for every level,
+  // the fallback and the song of the day alike. Your own history is yours, so it
+  // keeps its deep cuts. Search still covers everything.
+  const curated = settings.source === 'charts' || settings.source === 'decades' || settings.source === 'blend';
+  const playable = useMemo(() => {
+    if (!pool) return [];
+    const rated = playableTracks(pool.tracks, ratings);
+    return curated ? knownTracks(rated) : rated;
+  }, [curated, pool, ratings]);
 
   // Every song you have been played, so endless never serves one twice until the pool runs dry.
   const played = useRef<Set<string>>(new Set(loadPlayed()));
@@ -106,6 +141,9 @@ export function useGame(account: AccountApi): Game {
     const controller = new AbortController();
     setPoolState('loading');
     setPoolError(null);
+    setPoolSlow(false);
+    // A mix nobody has asked for before is built from Deezer on the spot, which can take a minute.
+    const slow = window.setTimeout(() => setPoolSlow(true), 6_000);
     api
       .pool(settings.source as ProviderId, settings.variant, controller.signal)
       .then((next) => {
@@ -117,32 +155,40 @@ export function useGame(account: AccountApi): Game {
         if (controller.signal.aborted) return;
         setPool(null);
         setPoolState('error');
-        setPoolError(error instanceof ApiError ? error.message : 'Could not reach Melodle');
-      });
-    return () => controller.abort();
-  }, [settings.source, settings.variant]);
+        setPoolError(error instanceof ApiError ? error.message : 'Could not reach Melodle. Check your connection and try again.');
+      })
+      .finally(() => window.clearTimeout(slow));
+    return () => {
+      controller.abort();
+      window.clearTimeout(slow);
+    };
+  }, [settings.source, settings.variant, poolAttempt]);
 
-  // Start a round whenever the list or the mode changes.
+  const retryPool = useCallback(() => setPoolAttempt((n) => n + 1), []);
+
+  // Start a round whenever the list or the mode changes. A round brought back
+  // from before a reload is this list's already, so it is kept, not replaced.
   useEffect(() => {
     if (!pool || !playable.length) {
-      if (!pool) setRound(null);
+      if (!pool) setRound((current) => (current && current.key === key && current.daily === settings.daily ? current : null));
       return;
     }
+    if (round && round.key === key && round.daily === settings.daily && round.status === 'playing') return;
     if (settings.daily) {
       const saved = loadProgress(key, day);
       // A round already under way keeps its song even if the list shifts underneath.
       const resumed = saved ? pool.tracks.find((track) => track.id === saved.answerId) : undefined;
       if (saved && resumed) {
-        setRound({ answer: resumed, guesses: saved.guesses, status: saved.status, daily: true });
+        setRound({ answer: resumed, guesses: saved.guesses, status: saved.status, daily: true, key });
         return;
       }
       const answer = dailyTrack(playable, key, day);
-      if (answer) setRound({ answer, guesses: [], status: 'playing', daily: true });
+      if (answer) setRound({ answer, guesses: [], status: 'playing', daily: true, key });
       return;
     }
     const answer = pickEndless();
-    if (answer) setRound({ answer, guesses: [], status: 'playing', daily: false });
-    // Ratings must not restart a round in progress, so `playable` is read, not watched.
+    if (answer) setRound({ answer, guesses: [], status: 'playing', daily: false, key });
+    // Ratings and the current round must not restart a round in progress, so they are read, not watched.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pool, settings.daily, key, day]);
 
@@ -160,6 +206,20 @@ export function useGame(account: AccountApi): Game {
   const answerId = round?.answer.id;
   const songStart = Boolean(account.me?.songStart);
   const wantIntro = settings.startMode === 'opening' && songStart && Boolean(answerId?.startsWith('deezer:'));
+  // Bumped when the page comes back to the front with no clip: a phone may have
+  // dropped the download, or the audio context, while the site was in the background.
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const loadingClip = useRef(false);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      void engine.warm().catch(() => undefined);
+      if (round && !decoded && !loadingClip.current) setLoadAttempt((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [decoded, engine, round]);
+
   useEffect(() => {
     if (!answerId) return;
     const controller = new AbortController();
@@ -168,9 +228,15 @@ export function useGame(account: AccountApi): Game {
     setIntroMissing(false);
     engine.stop();
     setPlaying(false);
+    loadingClip.current = true;
     const preview = () => engine.load(answerId, controller.signal);
+    // However the song start fails or stalls, the preview takes over within 12s.
+    const introSignal =
+      typeof AbortSignal.any === 'function'
+        ? AbortSignal.any([controller.signal, AbortSignal.timeout(INTRO_PATIENCE_MS)])
+        : controller.signal;
     const load = wantIntro
-      ? engine.load(answerId, controller.signal, 'intro').catch((problem: unknown) => {
+      ? engine.load(answerId, introSignal, 'intro').catch((problem: unknown) => {
           if (controller.signal.aborted) throw problem;
           setIntroMissing(true);
           return preview();
@@ -183,9 +249,12 @@ export function useGame(account: AccountApi): Game {
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setClipError(error instanceof Error ? error.message : 'This preview would not load');
+      })
+      .finally(() => {
+        loadingClip.current = false;
       });
     return () => controller.abort();
-  }, [answerId, engine, wantIntro]);
+  }, [answerId, engine, wantIntro, loadAttempt]);
 
   // Re-slicing is cheap, so the toggle takes effect without fetching again.
   const clip = useMemo(
@@ -288,9 +357,12 @@ export function useGame(account: AccountApi): Game {
     if (!finishedId) return;
     const { track } = freshTrack(difficultyBand(playable, settings.difficulty), playable, played.current, finishedId);
     upcoming.current = track;
-    if (prefetchIntro && track?.id.startsWith('deezer:')) {
+    if (!track) return;
+    // Both land in the browser's cache, so Next plays at once.
+    if (prefetchIntro && track.id.startsWith('deezer:')) {
       void fetch(`/api/intro?track=${encodeURIComponent(track.id)}`).catch(() => undefined);
     }
+    void fetch(`/api/audio?track=${encodeURIComponent(track.id)}`).catch(() => undefined);
   }, [finishedId, playable, prefetchIntro, settings.difficulty]);
 
   const nextRound = useCallback(() => {
@@ -298,8 +370,8 @@ export function useGame(account: AccountApi): Game {
     setSettings((current) => (current.daily ? { ...current, daily: false } : current));
     const ready = upcoming.current;
     const answer = ready && playable.includes(ready) ? ready : pickEndless(round?.answer.id);
-    if (answer) setRound({ answer, guesses: [], status: 'playing', daily: false });
-  }, [pickEndless, playable.length, round?.answer.id]);
+    if (answer) setRound({ answer, guesses: [], status: 'playing', daily: false, key });
+  }, [key, pickEndless, playable.length, round?.answer.id]);
 
   const chooseSource = useCallback((source: ProviderId, variant: string) => {
     setSettings((current) => ({ ...current, source, variant }));
@@ -332,11 +404,14 @@ export function useGame(account: AccountApi): Game {
     clip,
     clipError,
     introMissing,
+    restored,
+    poolSlow,
     day,
     unlocked,
     playing,
     engine,
     chooseSource,
+    retryPool,
     setDaily,
     setStartMode,
     setDifficultyLocked,

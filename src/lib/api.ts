@@ -10,8 +10,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { credentials: 'same-origin', ...init });
+/** Flaky phone connections hang more often than they fail; nothing may wait forever. */
+const TIMEOUT_MS = 20_000;
+/** A mix nobody asked for before is built from Deezer on the spot: up to a minute, cold. */
+const POOL_TIMEOUT_MS = 120_000;
+
+function withTimeout(signal: AbortSignal | null | undefined, ms: number): AbortSignal {
+  const timeout = AbortSignal.timeout(ms);
+  if (!signal) return timeout;
+  return typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, timeout]) : signal;
+}
+
+async function request<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, { credentials: 'same-origin', ...init, signal: withTimeout(init?.signal, timeoutMs) });
+  } catch (problem) {
+    if (init?.signal?.aborted) throw problem;
+    throw new ApiError(
+      problem instanceof Error && problem.name === 'TimeoutError' ? 'Melodle is taking too long to answer' : 'Could not reach Melodle',
+      0,
+    );
+  }
   const payload = await response.json().catch(() => ({}) as { error?: string });
   if (!response.ok) {
     throw new ApiError((payload as { error?: string }).error ?? 'Something went wrong', response.status);
@@ -42,8 +62,17 @@ export const api = {
   me: () => request<Me>('/api/me'),
   search: (query: string, signal?: AbortSignal) =>
     request<{ tracks: Track[] }>(`/api/search?q=${encodeURIComponent(query)}`, { signal }),
-  pool: (source: ProviderId, variant: string, signal?: AbortSignal) =>
-    request<Pool>(`/api/pool?source=${source}&variant=${encodeURIComponent(variant)}`, { signal }),
+  pool: async (source: ProviderId, variant: string, signal?: AbortSignal) => {
+    const path = `/api/pool?source=${source}&variant=${encodeURIComponent(variant)}`;
+    try {
+      return await request<Pool>(path, { signal }, POOL_TIMEOUT_MS);
+    } catch (problem) {
+      // One dropped connection should not end in an error screen.
+      if (signal?.aborted || !(problem instanceof ApiError) || problem.status !== 0) throw problem;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return request<Pool>(path, { signal }, POOL_TIMEOUT_MS);
+    }
+  },
 
   register: (username: string, password: string, invite?: string) =>
     send<{ account: Account }>('/api/account/register', { username, password, invite }),

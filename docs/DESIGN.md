@@ -183,3 +183,31 @@ Spirit opens at -29 dB (clean guitar) against -8 dB ten seconds in. A first
 fetch takes 6-9s, so the next song's opening is fetched while the reveal is on
 screen, which makes Next ready in about 0.3s.
 
+## ADR-15: languages are tags, the main lists are English, and a song is placed by words and artists
+
+Deezer does not record a song's language, and its charts are regional: the
+Belgian rock chart carries Brazilian and German rock. Players asked for genres
+in English and for Korean, Spanish, French and the rest as their own picks.
+
+So each language has a list, built like a decade: Deezer's chart for it where
+there is one, plus playlists whose titles name it. The lists then teach the
+classifier who sings in what. A song in a main list is moved out when its
+artist is on a language's list and its title or album shows a little of that
+language; when its artist sings only in that language (several songs on the
+list, none clearly English elsewhere) and the title is not clearly English; or,
+for an unlisted artist, when the title is clearly foreign (three words, or two
+real ones with nothing contradicting). Korean and Japanese are scenes as much
+as languages: an act on their list is theirs whatever the title says, so BTS
+in English is still K-pop. Crossovers (Shakira, Pitbull) keep their English
+hits in English because a word of evidence is required of them.
+
+Rejected: artist alone (Shakira's English hits would vanish from Pop); title
+alone (Peso Pluma's "LADY GAGA" is a corrido); an external language service
+(another key, another rate limit, for a few hundred thousand lookups).
+
+Measured on the lists as built: Pop lost every song by a foreign-language act;
+an English global+rock mix of 1,284 songs kept 11 foreign titles (under 1%);
+the language lists kept a handful of English titles by lesser-known acts.
+Shared little words ("la", "me", "on") count half, so "Viva La Vida", "Te Amo"
+and "Señorita" stay English.
+

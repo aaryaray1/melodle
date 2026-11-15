@@ -80,7 +80,7 @@ export function yearFits(year: number | undefined, decadeId: string): boolean {
 // Release dates never change. Unknown ones are not kept, so a rate-limited miss is retried.
 const years = new DiskCache<number | null>('release-year', 365 * 24 * 60 * 60 * 1000, (year) => year !== null, 5_000);
 
-async function releaseYear(trackId: string): Promise<number | undefined> {
+export async function releaseYear(trackId: string): Promise<number | undefined> {
   const id = trackId.split(':')[1];
   const year = await years.wrap(trackId, async () => {
     const info = await fetchJson<{ release_date?: string }>(`https://api.deezer.com/track/${id}`).catch(() => null);
@@ -95,7 +95,8 @@ const MAX_TRACKS = 700;
 const COMMUNITY_CHECKS = 200;
 /** Below this, the editors' playlists are topped up from users' ones that pass the same title test. */
 const TOP_UP_BELOW = 150;
-const pairs = new DiskCache<Track[]>('genre-decade', 24 * 60 * 60 * 1000, (tracks) => tracks.length > 0);
+// v3: language filtering moved out of the lists and into the route, as englishOnly.
+const pairs = new DiskCache<Track[]>('genre-decade-v3', 24 * 60 * 60 * 1000, (tracks) => tracks.length > 0);
 
 export async function genreDecadeTracks(genreId: string, genreLabel: string, decadeId: string): Promise<Track[]> {
   // "Global hits" is no genre at all: within a decade it is just that decade.

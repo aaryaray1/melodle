@@ -1345,6 +1345,215 @@
   color: var(--violet);
 }
 
+/* Phone dock --------------------------------------------------------------- */
+
+/*
+ * Rendered only in the phone layout. Everything a round needs, fixed where the
+ * thumb rests; it rides above the on-screen keyboard via --keyboard-inset.
+ */
+.dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--keyboard-inset, 0px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--ink-850) 94%, transparent);
+  border-top: 2px solid var(--line-strong);
+  box-shadow: 0 -12px 28px -14px #000;
+  backdrop-filter: blur(6px);
+}
+
+.dock-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.dock-main {
+  flex: 1;
+  min-height: 56px;
+}
+
+.dock .dock-play {
+  width: 4rem;
+  height: 4rem;
+}
+
+/* Results open upward from a field at the bottom, best match nearest the thumb. */
+.guessbar-up .guessbar-list {
+  top: auto;
+  bottom: calc(100% + 0.4rem);
+  display: flex;
+  flex-direction: column-reverse;
+  max-height: max(8rem, min(26rem, calc(var(--visible-height, 100dvh) - var(--dock-height, 12rem) - 1.5rem)));
+}
+
+.guessbar-up .guessbar-option + .guessbar-option {
+  margin-top: 0;
+  margin-bottom: 2px;
+}
+
+.tabbar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--line);
+  padding-top: 0.2rem;
+}
+
+/* While typing (and only then: a tapped button keeps focus too), the tabs make way for the results. */
+.dock:has(.guessbar-input:focus) .tabbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 50px;
+  padding-top: 0.3rem;
+  color: var(--haze);
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+}
+
+.tab:active {
+  color: var(--paper);
+}
+
+.tab-on {
+  color: var(--violet);
+}
+
+.difficulty-row {
+  display: flex;
+  justify-content: center;
+}
+
+.difficulty-open {
+  color: var(--haze);
+  text-decoration: underline dotted var(--line-strong);
+  text-underline-offset: 4px;
+}
+
+.difficulty-open:hover {
+  color: var(--paper);
+}
+
+/* Difficulty picker ----------------------------------------------------------- */
+
+.levels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.levels-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.level {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-2);
+  min-height: 56px;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--ink-800);
+}
+
+.level[data-level='1'] { --pip: #a874ff; }
+.level[data-level='2'] { --pip: #c46cf5; }
+.level[data-level='3'] { --pip: #e95fc4; }
+.level[data-level='4'] { --pip: #ff5a86; }
+.level[data-level='5'] { --pip: #ff4a3d; }
+
+.level-chosen {
+  border-color: var(--pip);
+  background: color-mix(in srgb, var(--pip) 16%, var(--ink-800));
+  box-shadow: 0 0 14px -5px var(--pip);
+}
+
+.level-number {
+  flex: none;
+  width: 2rem;
+  font-family: var(--marquee);
+  font-size: 1rem;
+  color: var(--pip);
+  text-align: center;
+}
+
+.level-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.level-name {
+  font-family: var(--display);
+  font-size: var(--step-1);
+  color: var(--paper);
+}
+
+.level-blurb {
+  color: var(--haze);
+  font-size: var(--step--1);
+}
+
+.levels-heading {
+  margin: var(--gap-1) 0 0;
+  color: var(--paper);
+}
+
+.levels-mode {
+  display: inline-flex;
+  align-self: flex-start;
+  flex-wrap: wrap;
+  padding: 3px;
+  gap: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+}
+
+.levels-note {
+  margin: 0;
+  color: var(--haze);
+  font-size: var(--step--1);
+}
+
+.levels-done {
+  min-height: 52px;
+}
+
+/* The last-resort screen when drawing the page fails. */
+.crash {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gap-3);
+  width: min(100% - 2rem, var(--shell));
+  margin: 3rem auto;
+}
+
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+}
+
+.crash-text {
+  margin: 0;
+  color: var(--haze);
+}
+
 /* Where the snippet starts ------------------------------------------------ */
 
 .starts {
@@ -1392,7 +1601,8 @@ label {
   .guessbar-submit,
   .rate-button,
   .difficulty-lock,
-  .difficulty-pip-button {
+  .difficulty-pip-button,
+  .difficulty-open {
     min-height: 44px;
   }
 
@@ -1452,7 +1662,8 @@ label {
   .shell {
     width: min(100% - 1.25rem, var(--shell));
     padding-block: calc(0.85rem + env(safe-area-inset-top, 0px));
-    padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+    /* Room for the dock, which carries the safe area itself. */
+    padding-bottom: calc(1.25rem + var(--dock-height, env(safe-area-inset-bottom, 0px)));
     gap: var(--gap-2);
   }
 
@@ -1556,5 +1767,16 @@ label {
 
   .footnote {
     padding-top: var(--gap-2);
+  }
+
+  /* Scrolled to on a finished round, it must stop above the dock, not under it. */
+  .reveal {
+    scroll-margin-bottom: calc(var(--dock-height, 0px) + 0.75rem);
+  }
+
+  .level,
+  .levels-mode .mode,
+  .tab {
+    min-height: 52px;
   }
 }

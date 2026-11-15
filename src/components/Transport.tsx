@@ -1,4 +1,5 @@
 import { STAGE_DURATIONS, type StartMode } from '../../shared/types.ts';
+import { PlayButton, playLabel } from './PlayButton.tsx';
 
 interface Props {
   unlocked: number;
@@ -10,35 +11,28 @@ interface Props {
   onStartMode: (mode: StartMode) => void;
   /** Accounts with song start hear the real opening; everyone else hears the start of the preview. */
   songStart: boolean;
+  /** On a phone the play button lives in the dock, under the thumb. */
+  showPlay?: boolean;
 }
 
-export function Transport({ unlocked, playing, ready, solved, startMode, songStart, onPlay, onStartMode }: Props) {
+export function Transport({
+  unlocked,
+  playing,
+  ready,
+  solved,
+  startMode,
+  songStart,
+  showPlay = true,
+  onPlay,
+  onStartMode,
+}: Props) {
   const stageIndex = STAGE_DURATIONS.indexOf(unlocked as (typeof STAGE_DURATIONS)[number]);
-  const label = solved ? 'Full 15 seconds' : `${unlocked}s unlocked`;
+  const label = playLabel(unlocked, solved);
   const step = solved || stageIndex < 0 ? null : `Attempt ${stageIndex + 1} of ${STAGE_DURATIONS.length}`;
 
   return (
     <div className="transport">
-      <button
-        type="button"
-        className="transport-play"
-        onClick={onPlay}
-        disabled={!ready}
-        aria-label={playing ? 'Stop the snippet' : `Play ${label}`}
-      >
-        <span className="transport-icon" data-playing={playing} aria-hidden="true">
-          {playing ? (
-            <svg viewBox="0 0 24 24" width="26" height="26">
-              <rect x="6" y="5" width="4" height="14" rx="1.4" fill="currentColor" />
-              <rect x="14" y="5" width="4" height="14" rx="1.4" fill="currentColor" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" width="26" height="26">
-              <path d="M8 5.6v12.8a1 1 0 0 0 1.54.84l9.2-6.4a1 1 0 0 0 0-1.68l-9.2-6.4A1 1 0 0 0 8 5.6Z" fill="currentColor" />
-            </svg>
-          )}
-        </span>
-      </button>
+      {showPlay ? <PlayButton playing={playing} ready={ready} label={label} onPlay={onPlay} /> : null}
       <div className="transport-readout">
         <span className="transport-amount">{label}</span>
         {step ? <span className="transport-step">{step}</span> : null}

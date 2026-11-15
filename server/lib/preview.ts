@@ -26,6 +26,7 @@ interface DeezerTrack {
   id: number;
   title: string;
   title_short?: string;
+  title_version?: string;
   preview?: string;
   link?: string;
   rank?: number;
@@ -79,6 +80,7 @@ async function fromDeezer(seed: TrackSeed): Promise<Track | null> {
     previewFrom: 'deezer',
     link: safeUrl(seed.link ?? track.link),
     rank: track.rank,
+    version: versionOf(track),
   };
 }
 
@@ -129,6 +131,15 @@ export async function resolvePreview(seed: TrackSeed): Promise<Track | null> {
 }
 
 /** Deezer tracks already carry a preview, so they skip the lookup entirely. */
+/** Deezer's title_version, or whatever the full title adds to the short one. */
+function versionOf(raw: DeezerTrack): string | undefined {
+  const named = raw.title_version?.trim();
+  if (named) return named;
+  const short = raw.title_short?.trim();
+  if (short && raw.title.startsWith(short) && raw.title.length > short.length) return raw.title.slice(short.length).trim();
+  return undefined;
+}
+
 export function trackFromDeezer(raw: DeezerTrack): Track | null {
   if (!raw.preview) return null;
   return {
@@ -141,6 +152,7 @@ export function trackFromDeezer(raw: DeezerTrack): Track | null {
     previewFrom: 'deezer',
     link: safeUrl(raw.link),
     rank: raw.rank,
+    version: versionOf(raw),
   };
 }
 

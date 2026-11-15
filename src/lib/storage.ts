@@ -1,5 +1,6 @@
 import { STAGE_DURATIONS, type Rating, type StartMode, type Stats } from '../../shared/types.ts';
 import type { Guess, Status } from '../game/rules.ts';
+import type { SavedRound } from '../game/resume.ts';
 
 const PREFIX = 'melodle.v1';
 
@@ -158,4 +159,13 @@ export function loadPlayed(): string[] {
 
 export function savePlayed(keys: Iterable<string>): void {
   write('played', { keys: [...keys].slice(-PLAYED_LIMIT) });
+}
+
+/** The round in progress, so a reload or a phone dropping the tab cannot lose the song. */
+export function loadRound(): SavedRound | null {
+  return read<{ round: SavedRound | null }>('round', { round: null }).round;
+}
+
+export function saveRound(round: SavedRound | null): void {
+  write('round', { round });
 }

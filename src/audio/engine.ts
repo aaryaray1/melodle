@@ -22,8 +22,18 @@ export class AudioEngine {
   private clipEnd = 0;
   private onEnded: (() => void) | null = null;
 
-  /** A suspended context is enough to decode; only playback needs a gesture. */
+  /**
+   * A suspended context is enough to decode; only playback needs a gesture. A
+   * phone can close the context outright while the site is in the background
+   * (and iOS reports "interrupted" during a call): a closed one is replaced.
+   */
   private ensureContext(): AudioContext {
+    if (this.context && (this.context.state as string) === 'closed') {
+      this.context = null;
+      this.master = null;
+      this.source = null;
+      this.gain = null;
+    }
     if (!this.context) {
       const Ctor =
         window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -38,7 +48,7 @@ export class AudioEngine {
   /** Resuming costs a few hundred ms, so spend it on the first touch, not the first play. */
   async warm(): Promise<void> {
     const context = this.ensureContext();
-    if (context.state === 'suspended') await context.resume();
+    if ((context.state as string) !== 'running') await context.resume();
   }
 
   /**
@@ -61,7 +71,7 @@ export class AudioEngine {
    */
   async play(clip: LoadedClip, duration: number, onEnded?: () => void): Promise<void> {
     const context = this.ensureContext();
-    if (context.state === 'suspended') await context.resume();
+    if ((context.state as string) !== 'running') await context.resume();
     const master = this.master;
     if (!master) return;
     this.stop();

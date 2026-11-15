@@ -10,6 +10,8 @@ interface Props {
   /** Songs already guessed this round: shown, marked, and not selectable. */
   isGuessed: (track: Track) => boolean;
   onGuess: (track: Track) => void;
+  /** In the phone dock the field sits at the bottom, so results open upward, best match nearest the thumb. */
+  opensUp?: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ interface Props {
  * only selects it, shown in the field with its cover; Guess, or a second Enter,
  * sends it. A misclick costs nothing but picking again.
  */
-export function GuessBar({ tracks, disabled, isGuessed, onGuess }: Props) {
+export function GuessBar({ tracks, disabled, isGuessed, onGuess, opensUp = false }: Props) {
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Track | null>(null);
   const [active, setActive] = useState(0);
@@ -81,6 +83,8 @@ export function GuessBar({ tracks, disabled, isGuessed, onGuess }: Props) {
     setPicked(null);
     setQuery('');
     setOpen(false);
+    // On a phone, guessing closes the keyboard: the layout settles now, not under the next tap.
+    if (opensUp) inputRef.current?.blur();
   };
 
   const showList = open && matches.length > 0 && !disabled;
@@ -112,7 +116,7 @@ export function GuessBar({ tracks, disabled, isGuessed, onGuess }: Props) {
 
 
   return (
-    <div className="guessbar">
+    <div className={opensUp ? 'guessbar guessbar-up' : 'guessbar'}>
       <div className={picked ? 'guessbar-field guessbar-field-picked' : 'guessbar-field'}>
         {picked ? <Cover track={picked} size={36} className="guessbar-picked-cover" /> : null}
         <input

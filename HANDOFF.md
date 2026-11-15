@@ -92,6 +92,80 @@ About 6,400 lines across `server/`, `src/`, `shared/`. 70 tests, all passing.
   stop and the fade-out later while the clip sounds (start() no longer takes a
   duration, so the end stays movable); a skip or wrong guess calls it.
 - **Difficulty pips are buttons:** tap one to set the level; the lock remains.
+- **One-handed phone layout** (≤34rem, `useMediaQuery` in `src/lib/viewport.ts`):
+  a fixed dock (`Dock.tsx`) holds the guess field, Skip/Next and Play, with a
+  tab bar (Songs, Level, Record, You) replacing the masthead icons. Results open
+  upward, best match nearest the thumb. The dock rides above the keyboard
+  (`--keyboard-inset` from visualViewport; `interactive-widget=resizes-content`
+  for Android) and publishes `--dock-height` so the page leaves room. Tabs hide
+  only while the field is focused; dock buttons keep focus where it was and a
+  guess blurs the field, because a focus change mid-tap moved Skip out from
+  under the finger (caught in testing). Sheets close on a backdrop tap. Desktop
+  is unchanged. Mode toggle (Song of the day / Endless) stays at the top: rare.
+- **Difficulty picker** (`DifficultySheet.tsx`, Level tab or the "Difficulty"
+  label): the five levels named (`DIFFICULTY_LEVELS`) and described, plus "move
+  up a level" / "stay on this level" (the lock).
+- **No alternate versions as answers** (`shared/versions.ts`, applied to every
+  pool in the /pool route): remixes, other named mixes (not Radio/Original/7"/
+  Single Mix), extended, acoustic, stripped, unplugged, live, instrumental,
+  karaoke, sped up/slowed, re-recorded, tribute acts. Deezer hides the version
+  in `title_version` (now kept as `Track.version`); remix singles show only in
+  the album name; a "Remix EP" album also holds the original, so it does not
+  count. Audited on four real lists: 117 removed, one false positive found and
+  fixed (an album titled "...Live In Anymore"). Hits that only exist as a remix
+  or live take (Seeb's Ibiza, Live Is Life) go too, by request.
+- **Popularity floor** (`knownTracks`, `POPULARITY_FLOOR = 300k`): curated lists
+  (charts, decades, mixes) pick only songs above it, for every level, the
+  fallback and the song of the day; history and parties keep their deep cuts.
+  Level 5's bottom went from 28-187k to 301-338k (Tumbling Dice, Little Red
+  Corvette, Is It Any Wonder?). Search still covers everything.
+- **Spanish is its own genre** (id 197, Deezer's Latin chart, labelled "Spanish",
+  after Pop): the chart plus Spanish-language playlists (including regional
+  mexicano, corridos, rock en español), minus anything clearly in another
+  language. **Pop sheds its Spanish songs** (`withoutSpanish`), as does Pop
+  within a decade. Deezer gives no song language, so `shared/language.ts`
+  judges from words: Spanish words and title accents for, English words
+  against, French and Portuguese kept apart; distinct words once; album words
+  at half and only if not already in the title. An artist on the Spanish list
+  may be judged on an album; one who sings almost only in Spanish
+  (`spanishOnlyArtists`) on anything short of a clearly English title. Checked
+  against all 239 songs actually played from Pop: the 5 Spanish ones (incl.
+  Peso Pluma's "LADY GAGA") go, English hits by Latin artists (Hips Don't Lie,
+  Havana, Hero) stay. There is no K-pop genre; Deezer only has "Asian Music".
+- **Reliability (2026-11-15).** The round in progress is saved on every change
+  (`src/game/resume.ts`, storage key `round`, answer included) and brought back
+  after a reload, a crash, or a phone dropping the tab, with a 6s notice, before
+  and independent of the song list loading. An `ErrorBoundary` replaces the
+  blank page with a reload button; `src/lib/report.ts` posts render errors and
+  unhandled rejections to `POST /api/client-log` (60/min cap, truncated), so a
+  blank screen on a phone can be explained from the server log. Requests time
+  out (20s; song lists 120s with one retry); the list request can be retried
+  from the error panel; a slow first build says so after 6s. The audio engine
+  replaces a closed context and resumes an interrupted one; on return to the
+  foreground a missing clip is fetched again.
+- **Speed.** `/api` JSON above 1 kB is brotli/gzip compressed in
+  `server/lib/compress.ts` (global hits: 235 kB to 49 kB); the preview URL is
+  stripped from list payloads; lists carry `max-age=600`; the next song's
+  preview is prefetched during the reveal; `server/lib/warmup.ts` builds every
+  main list after each start (about a minute, in the background).
+- **Languages as tags** (`shared/language.ts`, `server/providers/languages.ts`,
+  `facets.ts`): Korean, Japanese, Spanish, French, German, Italian, Portuguese,
+  Dutch, picked alongside genres and decades (`lang:xx` parts, MAX_BLEND 10).
+  Each language's list is Deezer's chart for it plus playlists titled for it
+  (and for its genres), minus clearly-other-language titles and English-chart
+  acts with English titles. **The main lists are English only**: `englishOnly`
+  drops anything the lists or the words of a title place elsewhere (artist on
+  a list + a little evidence; unlisted + a clearly foreign title; Korean and
+  Japanese by artist alone, so BTS's Dynamite is Korean). Language x genre x
+  decade is built from the most specific playlists Deezer titles that way, and
+  the decade applied by release date when titles cannot. The old Spanish genre
+  (`charts:197`) maps to `lang:es`. **Global hits is an ordinary pick** that
+  mixes with genres (chips are plain toggles); nothing picked still means
+  global hits. Measured after the last build: Pop has no songs by
+  foreign-language acts; a 1,340-song English global+rock mix kept 2 foreign
+  titles; the language lists keep a few English titles by lesser-known acts.
+  Korean 528 songs, German 720, French 518, Italian 520, Korean · Pop 439,
+  Korean · Pop · The 10s 273; cold builds 3-10s, then on disk.
 - Verified by driving the deployed build in headless Chromium, twice from a cold
   restart: every difficulty rule, the lock, the reds at each level, the purple
   song of the day, a genre+decade mix, fonts loading, no overflow at 390px.
@@ -150,7 +224,16 @@ would rather.
 3. **Verify the APK on a phone**, then decide whether a release-signed build is
    worth it.
 4. Optional: YouTube Music verification, a release keystore.
-5. **Song start from YouTube is live** (ADR-14), for the accounts in
+5. **YouTube is refusing song starts (2026-11-08):** "Sign in to confirm you're
+   not a bot" for this home's address, every client, latest yt-dlp too. It made
+   each new song wait ~12s for three doomed attempts before the preview. Now a
+   bot refusal stops at once and pauses song starts for 30 min
+   (`SONG_START_PAUSE_MS`), so players get the preview immediately; stored
+   openings (363) still play; the client also falls back after 12s whatever
+   happens. Retried automatically every 30 min. Routing around the block (the
+   home's IPv6 was still served) was deliberately not done: it is bot-check
+   circumvention. Owner's options: wait it out, or decide on something else.
+   **Song start from YouTube** (ADR-14), for the accounts in
    `SONG_START_USERS` only (`abyss,NotKloudie`; empty would mean every signed-in
    account). `/me` reports `songStart`, so everyone else sees "Clip start". Verified: nine known openings
    right by loudness, 12/12 chart songs fetched through the real route in 7-9s,

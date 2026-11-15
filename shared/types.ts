@@ -20,6 +20,8 @@ export interface Track {
   contributor?: string;
   /** Deezer's popularity score, up to about a million. Drives difficulty. */
   rank?: number;
+  /** What Deezer keeps apart from the title: "(Acoustic)", "(Club Mix)". Empty for the record itself. */
+  version?: string;
 }
 
 export interface ResolvedTracks {
@@ -84,6 +86,8 @@ export interface Me {
   account: Account | null;
   connections: Connections;
   variants: Record<ProviderId, VariantOption[]>;
+  /** Languages that can be picked alongside genres and decades. The main lists are English. */
+  languages: VariantOption[];
   /** Server-side stats, present only while signed in. */
   stats: Stats | null;
   ratings: Record<string, Rating>;

@@ -3,6 +3,7 @@ import path from 'node:path';
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { env } from './lib/env.ts';
+import { compressJson } from './lib/compress.ts';
 import { UpstreamError } from './lib/http.ts';
 import { loadStoredKeys } from './lib/keys.ts';
 import { sessionMiddleware } from './lib/session.ts';
@@ -54,8 +55,21 @@ app.get('/api/ping', (_request, response) => {
   response.json({ app: 'melodle', api: 1 });
 });
 
-app.use(express.json({ limit: '16kb' }));
-app.use('/api', sessionMiddleware);
+app.use(express.json({ limit: '16kb', type: ['application/json', 'text/plain'] }));
+
+// Crashes and unhandled errors from the page, so a blank screen on a phone can be
+// explained afterwards. Capped, truncated, and never echoed back.
+let clientLogs = 0;
+setInterval(() => (clientLogs = 0), 60_000).unref();
+app.post('/api/client-log', (request, response) => {
+  response.status(204).end();
+  if (clientLogs >= 60) return;
+  clientLogs += 1;
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const field = (name: string, max: number) => String(body[name] ?? '').slice(0, max).replace(/\s+/g, ' ');
+  console.error('[melodle] client', field('kind', 20), field('message', 300), '@', field('url', 120), '|', field('stack', 600));
+});
+app.use('/api', compressJson, sessionMiddleware);
 app.use('/api', catalogueRouter, accountRouter, authRouter, partyRouter, setupRouter, audioRouter);
 
 app.use('/api', (_request: Request, response: Response) => {

@@ -7,6 +7,7 @@ import {
   freshTrack,
   guessFor,
   isGuessed,
+  knownTracks,
   hash,
   MAX_DIFFICULTY,
   nextDifficulty,
@@ -278,4 +279,17 @@ test('a song already guessed this round is recognised, whatever album it came fr
 test('guesses saved before keys existed are still recognised by their label', () => {
   const [song] = ranked(1) as [Track];
   assert.ok(isGuessed([{ outcome: 'wrong', label: `${song.title} — ${song.artist}` }], song));
+});
+
+test('songs below the popularity floor never come up, unless the list has too few above it', () => {
+  const tracks = ranked(100); // ranks 1,000,000 down to 901,000
+  const withTail = [...tracks, ...Array.from({ length: 40 }, (_, n) => ({ ...(tracks[0] as Track), id: `deezer:tail${n}`, title: `Tail ${n}`, rank: 50_000 + n }))];
+  const known = knownTracks(withTail, 300_000);
+  assert.equal(known.length, 100, 'the 40 obscure songs are left out');
+  assert.ok(known.every((track) => (track.rank ?? 0) >= 300_000));
+
+  const mostlyObscure = withTail.slice(90);
+  const relaxed = knownTracks(mostlyObscure, 300_000);
+  assert.ok(relaxed.length >= 20, 'a list with almost nothing above the floor still plays');
+  assert.equal(relaxed[0]?.rank, tracks[90]?.rank, 'starting from its most popular songs');
 });

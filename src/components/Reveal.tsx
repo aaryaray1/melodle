@@ -11,10 +11,12 @@ interface Props {
   rating: Rating | 0;
   onRate: (rating: Rating | 0) => void;
   onNext: () => void;
+  /** On a phone Next lives in the dock, under the thumb. */
+  showNext?: boolean;
   onShare: () => string;
 }
 
-export function Reveal({ track, status, guesses, daily, rating, onRate, onNext, onShare }: Props) {
+export function Reveal({ track, status, guesses, daily, rating, onRate, onNext, onShare, showNext = true }: Props) {
   const [copied, setCopied] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
   const won = status === 'won';
@@ -84,9 +86,11 @@ export function Reveal({ track, status, guesses, daily, rating, onRate, onNext, 
       </div>
       {rating === -1 ? <p className="reveal-note">Noted. This one will not come up again.</p> : null}
       <div className="reveal-actions">
-        <button type="button" className="button button-primary" onClick={onNext}>
-          {daily ? 'Play another song' : 'Next song'}
-        </button>
+        {showNext ? (
+          <button type="button" className="button button-primary" onClick={onNext}>
+            {daily ? 'Play another song' : 'Next song'}
+          </button>
+        ) : null}
         <button type="button" className="button" onClick={share}>
           {copied ? 'Copied' : 'Copy result'}
         </button>

@@ -7,7 +7,8 @@ import { addPlaylistTracks, editorialPlaylists } from './editorial.ts';
 
 const genreCache = new TtlCache<VariantOption[]>(24 * 60 * 60 * 1000, 4);
 // Charts move daily; six hours keeps them current without rebuilding on every deploy.
-const chartCache = new DiskCache<Track[]>('chart', 6 * 60 * 60 * 1000, (tracks) => tracks.length > 0);
+// v4: language filtering moved out of the lists and into the route, as englishOnly.
+const chartCache = new DiskCache<Track[]>('chart-v4', 6 * 60 * 60 * 1000, (tracks) => tracks.length > 0);
 
 /** The chart itself is 100 songs; editorial playlists for the genre widen it to this. */
 const MAX_TRACKS = 1200;
@@ -21,6 +22,7 @@ function playlistQueries(genreId: string, name: string): string[] {
 }
 
 const GENRE_ORDER = ['0', '132', '116', '152', '113', '165', '85', '106', '466', '129', '144', '464'];
+const LABELS: Record<string, string> = { '0': 'Global hits' };
 
 export async function chartVariants(): Promise<VariantOption[]> {
   return genreCache.wrap('genres', async () => {
@@ -28,7 +30,7 @@ export async function chartVariants(): Promise<VariantOption[]> {
     const byId = new Map((payload.data ?? []).map((genre) => [String(genre.id), genre.name]));
     const ordered = GENRE_ORDER.filter((id) => byId.has(id)).map((id) => ({
       id,
-      label: id === '0' ? 'Global hits' : (byId.get(id) as string),
+      label: LABELS[id] ?? (byId.get(id) as string),
     }));
     return ordered.length ? ordered : [{ id: '0', label: 'Global hits' }];
   });
@@ -36,24 +38,26 @@ export async function chartVariants(): Promise<VariantOption[]> {
 
 export async function chartTracks(variant: string): Promise<Track[]> {
   const genreId = /^\d+$/.test(variant) ? variant : '0';
-  return chartCache.wrap(genreId, async () => {
-    const payload = await fetchJson<{ data?: Parameters<typeof trackFromDeezer>[0][] }>(
-      `https://api.deezer.com/chart/${genreId}/tracks?limit=100`,
-    );
-    const chart = (payload.data ?? []).map(trackFromDeezer).filter((track): track is Track => track !== null);
-    // Widening is a bonus: if the playlist search fails, the chart alone still plays.
-    try {
-      const name = genreId === '0' ? '' : await chartLabel(genreId);
-      const playlists = await editorialPlaylists({
-        queries: playlistQueries(genreId, name),
-        maxPlaylists: MAX_PLAYLISTS,
-        minTracks: 30,
-      });
-      return await addPlaylistTracks(chart, playlists, MAX_TRACKS);
-    } catch {
-      return chart;
-    }
-  });
+  return chartCache.wrap(genreId, () => buildChart(genreId));
+}
+
+async function buildChart(genreId: string): Promise<Track[]> {
+  const payload = await fetchJson<{ data?: Parameters<typeof trackFromDeezer>[0][] }>(
+    `https://api.deezer.com/chart/${genreId}/tracks?limit=100`,
+  );
+  const chart = (payload.data ?? []).map(trackFromDeezer).filter((track): track is Track => track !== null);
+  // Widening is a bonus: if the playlist search fails, the chart alone still plays.
+  try {
+    const name = genreId === '0' ? '' : await chartLabel(genreId);
+    const playlists = await editorialPlaylists({
+      queries: playlistQueries(genreId, name),
+      maxPlaylists: MAX_PLAYLISTS,
+      minTracks: 30,
+    });
+    return await addPlaylistTracks(chart, playlists, MAX_TRACKS);
+  } catch {
+    return chart;
+  }
 }
 
 export async function chartLabel(variant: string): Promise<string> {

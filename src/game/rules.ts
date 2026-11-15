@@ -109,6 +109,15 @@ export function playableTracks(tracks: Track[], ratings: Record<string, 1 | -1>)
 
 export const MAX_DIFFICULTY = 5;
 
+/** What each level means, for the picker. They follow difficultyBand's popularity windows. */
+export const DIFFICULTY_LEVELS = [
+  { name: 'Warm-up', blurb: 'Only the biggest hits on the list' },
+  { name: 'Easy', blurb: 'Songs most people would know' },
+  { name: 'Medium', blurb: 'The middle of the list: hits and album favourites' },
+  { name: 'Hard', blurb: 'Lesser-known songs, fewer smash hits' },
+  { name: 'Expert', blurb: 'The deepest cuts on the list' },
+] as const;
+
 export function clampDifficulty(level: number): number {
   return Number.isFinite(level) ? Math.min(Math.max(Math.round(level), 1), MAX_DIFFICULTY) : 1;
 }
@@ -121,6 +130,27 @@ export function nextDifficulty(level: number, won: boolean, locked = false): num
   const current = clampDifficulty(level);
   if (locked || !won) return current;
   return current === MAX_DIFFICULTY ? 1 : current + 1;
+}
+
+/**
+ * Below this Deezer popularity a song is niche: new releases nobody has heard
+ * yet, regional novelty records, a band's lesser album track. Measured on real
+ * pools, 400k and up is a recognisable hit, 300-400k still a real one, and
+ * under 200k mostly songs few would know.
+ */
+export const POPULARITY_FLOOR = 300_000;
+const MIN_KNOWN = 20;
+
+/**
+ * The songs a curated list may ask for, most popular first: those above the
+ * floor. A list with too few above it keeps its most popular 80% instead, so it
+ * still plays. Unranked songs (Apple matches) count as unknown, and go last.
+ */
+export function knownTracks(tracks: Track[], floor = POPULARITY_FLOOR): Track[] {
+  const byPopularity = [...tracks].sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
+  const known = byPopularity.filter((track) => (track.rank ?? 0) >= floor);
+  if (known.length >= MIN_KNOWN) return known;
+  return byPopularity.slice(0, Math.max(Math.min(MIN_KNOWN, byPopularity.length), Math.ceil(byPopularity.length * 0.8)));
 }
 
 /**
