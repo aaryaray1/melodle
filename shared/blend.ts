@@ -50,10 +50,14 @@ export function crossLabel(genres: string[], decades: string[]): string {
   return `${blendLabel(genres)} · ${blendLabel(decades)}`;
 }
 
-/** Languages, then genres, then decades: "Korean · Pop · The 10s", "Rock + Metal". */
+/**
+ * Genres and decades narrow each other ("Pop · The 10s"); languages add their
+ * songs on top ("Pop · The 10s + Korean", "Rock + Korean", "Korean + Spanish").
+ */
 export function mixLabel(languages: string[], genres: string[], decades: string[]): string {
-  return [languages, genres, decades]
+  const english = [genres, decades]
     .filter((group) => group.length)
     .map((group) => blendLabel(group))
     .join(' · ');
+  return [english, ...languages].filter(Boolean).join(' + ');
 }

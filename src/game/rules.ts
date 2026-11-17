@@ -140,6 +140,8 @@ export function nextDifficulty(level: number, won: boolean, locked = false): num
  */
 export const POPULARITY_FLOOR = 300_000;
 const MIN_KNOWN = 20;
+/** Above this many songs over the floor, the floor alone decides. */
+const WELL_KNOWN = 100;
 
 /**
  * The songs a curated list may ask for, most popular first: those above the
@@ -149,8 +151,12 @@ const MIN_KNOWN = 20;
 export function knownTracks(tracks: Track[], floor = POPULARITY_FLOOR): Track[] {
   const byPopularity = [...tracks].sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
   const known = byPopularity.filter((track) => (track.rank ?? 0) >= floor);
-  if (known.length >= MIN_KNOWN) return known;
-  return byPopularity.slice(0, Math.max(Math.min(MIN_KNOWN, byPopularity.length), Math.ceil(byPopularity.length * 0.8)));
+  if (known.length >= WELL_KNOWN) return known;
+  // Smaller markets score lower on Deezer across the board (a Thai or Hindi hit
+  // rarely reaches 300k), so a list with few songs above the floor keeps its most
+  // popular 60% instead of being cut to a handful.
+  const share = Math.ceil(byPopularity.length * 0.6);
+  return byPopularity.slice(0, Math.max(known.length, Math.min(byPopularity.length, Math.max(MIN_KNOWN, share))));
 }
 
 /**

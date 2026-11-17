@@ -130,3 +130,14 @@ test('small answers and non-JSON routes are left alone', async () => {
   const ping = await fetch(`${base}/api/ping`, { headers: { 'accept-encoding': 'br, gzip' } });
   assert.equal(ping.headers.get('content-encoding'), null);
 });
+
+test('a language adds its songs to the pick instead of narrowing it', async () => {
+  const response = await fetch(`${base}/api/pool?source=blend&variant=charts:152,lang:ko`);
+  assert.equal(response.status, 200);
+  const pool = (await response.json()) as { label: string; tracks: { artist: string; title: string }[] };
+  assert.equal(pool.label, 'Rock + Korean');
+  const kpop = pool.tracks.filter((track) => /^(bts|blackpink|twice|newjeans|exo|ive|aespa|stray kids|seventeen|le sserafim|itzy|psy)$/i.test(track.artist));
+  const rock = pool.tracks.filter((track) => /^(nirvana|queen|the rolling stones|ac\/dc|green day|foo fighters|red hot chili peppers|oasis|linkin park|coldplay|u2|bon jovi)$/i.test(track.artist));
+  assert.ok(kpop.length >= 3, `K-pop in it: ${kpop.length}`);
+  assert.ok(rock.length >= 3, `English rock in it too: ${rock.length}`);
+});

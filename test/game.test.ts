@@ -290,6 +290,6 @@ test('songs below the popularity floor never come up, unless the list has too fe
 
   const mostlyObscure = withTail.slice(90);
   const relaxed = knownTracks(mostlyObscure, 300_000);
-  assert.ok(relaxed.length >= 20, 'a list with almost nothing above the floor still plays');
+  assert.ok(relaxed.length >= 30, 'a list with little above the floor keeps its most popular 60% instead');
   assert.equal(relaxed[0]?.rank, tracks[90]?.rank, 'starting from its most popular songs');
 });

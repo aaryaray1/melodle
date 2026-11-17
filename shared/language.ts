@@ -18,15 +18,24 @@ export interface LanguageFacts {
   album?: string;
 }
 
-export type LanguageCode = 'ko' | 'ja' | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'nl';
+export type LanguageCode =
+  | 'ko' | 'ja' | 'zh' | 'hi' | 'pa' | 'ar' | 'th' | 'el' | 'uk' | 'ru'
+  | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'nl'
+  | 'sv' | 'no' | 'da' | 'fi' | 'pl' | 'tr' | 'ro' | 'hu' | 'cs' | 'lt' | 'id' | 'vi' | 'tl';
 /** In the order they are tried; the script-based ones first. */
-export const LANGUAGE_CODES: LanguageCode[] = ['ko', 'ja', 'es', 'fr', 'de', 'it', 'pt', 'nl'];
+export const LANGUAGE_CODES: LanguageCode[] = [
+  'ko', 'ja', 'zh', 'hi', 'pa', 'ar', 'th', 'el', 'uk', 'ru',
+  'es', 'fr', 'de', 'it', 'pt', 'nl',
+  'sv', 'no', 'da', 'fi', 'pl', 'tr', 'ro', 'hu', 'cs', 'lt', 'id', 'vi', 'tl',
+];
 
 export interface LanguageIndex {
   /** Artists with a song on each language's list. Lowercase. */
   lists: ReadonlyMap<string, ReadonlySet<string>>;
   /** Artists who sing only in that language, as far as the lists show. Lowercase. */
   only: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Songs per artist on each language's list. Lowercase. Missing means "a regular". */
+  counts?: ReadonlyMap<string, ReadonlyMap<string, number>>;
 }
 
 const list = (text: string) => new Set(text.split(/\s+/).filter(Boolean));
@@ -41,6 +50,47 @@ const WORDS: Record<LanguageCode | 'en', ReadonlySet<string>> = {
     too very way day days year years little big old new last first`),
   ko: list(''),
   ja: list(''),
+  zh: list(''),
+  th: list(''),
+  el: list(''),
+  uk: list(''),
+  ru: list(''),
+  // Bollywood and bhangra titles are romanised on Deezer.
+  hi: list(`tum hi ho tera mera tere mere teri meri dil pyaar pyar ishq jaan mohabbat tu main hum kya hai nahi nahin
+    ke ki ka se mein aur yeh woh raat chand sapna yaar sanam kesariya mehbooba dilbar sajna jaana zindagi duniya
+    khuda rab ishqa deewana dewaana mast bas phir kabhi kyun kaise koi kuch sab tumse tumhe mujhe mujhse humko`),
+  pa: list(`tenu menu sanu tere mere dil jatt munda kudi soniye ve ni challa pind gabru yaar jaan sohni heer ranjha
+    chak de nach lehenga patola jaaniye vich naal taan kehnde tainu mainu sadi tuhadi`),
+  ar: list(`habibi habibti ya albi alby ana enta enti inta inti leh fi wallah ahla ahlam omri hayati nour ayni galbi
+    yalla khalas bahebak bhebak keef ma3ak`),
+  sv: list(`och jag du inte dig mig ar det en ett med for vi har kan vill ska bara allt hem natt karlek hjarta aldrig
+    alltid nu har igen varfor som nar vad man din min kommer`),
+  no: list(`og jeg deg meg ikke er det en et med for vi har kan vil skal bare alt hjem natt kjaerlighet hjerte aldri
+    alltid na her igjen hvorfor som nar hva din min`),
+  da: list(`og jeg dig mig ikke er det en et med for vi har kan vil skal bare alt hjem nat kaerlighed hjerte aldrig
+    altid nu her igen hvorfor som nar hvad din min`),
+  fi: list(`ja mina sina sa ma ei on ole olen olet rakkaus sydan yo aina koskaan nyt tassa taas miksi kun mita mun
+    sun kanssa ilman vain kaikki koti sinua sinut minua`),
+  pl: list(`i nie jest ja ty mnie cie ciebie sie jak co to tak nigdy zawsze teraz tu znowu dlaczego kiedy milosc serce
+    noc dom moja twoja bez z dla chce kocham`),
+  tr: list(`ve bir bu sen ben seni beni ask kalp gece sevgilim yok var icin gibi daha cok hic hep simdi neden kadar
+    sana bana her seyi yak yar canim hayat aska`),
+  ro: list(`si nu este eu tu ma te sunt esti dragoste inima noapte mereu niciodata acum aici iar de ce cand cu fara
+    pentru ochii tai mei`),
+  hu: list(`es nem van en te engem teged szerelem sziv ejszaka mindig soha most itt ujra miert mikor mi veled nelkul
+    csak minden otthon`),
+  cs: list(`a ne je ja ty me te jsem jsi laska srdce noc vzdy nikdy ted tady zase proc kdyz co s bez pro jen vsechno
+    domu`),
+  lt: list(`ir as tu tave mane man tau meile sirdis naktis visada niekada dabar cia kodel kai kas su be tik viskas
+    namai mano tavo myliu noriu gyvenimas vasara laikas diena saule dangus jura taip labas aciu grazus grazi mergaite
+    vaikinas lietuva daina dainos leidzias vejas salia manes esi buvai busi kur kaip jei nes bet dar jau vel tik
+    sapnai svajones zvaigzdes lietus ziema ruduo pavasaris akys rankos lupos`),
+  id: list(`dan aku kamu tidak kau ku mu cinta hati malam selalu tak pernah sekarang di sini lagi kenapa ketika apa
+    dengan tanpa untuk hanya semua rumah sayang rindu jalan hati-hati`),
+  vi: list(`va anh em khong yeu tinh trai tim dem mai chang bao gio bay o day lai tai sao khi gi voi cua cho chi tat
+    ca nha chung ta hien`),
+  tl: list(`at ako ikaw hindi mahal puso gabi lagi kailanman ngayon dito muli bakit kapag ano sa ng mo ko kita ba na
+    ay para wala kathang isip ikaw`),
   es: list(`que de del el la los las mi mis tu tus te y en por para con sin una uno amor corazon noche dia baila bailar
     bailando quiero vida eres soy estoy estas cuando como todo nada siempre nunca mujer hombre beso besos dime dame ven
     vamos loco loca bonita bonito bebe mami papi perreo gasolina despacito adios hasta otra otro vez manana tiempo ojos
@@ -48,6 +98,8 @@ const WORDS: Record<LanguageCode | 'en', ReadonlySet<string>> = {
     verano calor pa pal nena guapa quien porque pero mas mucho poco bien mal buena bueno malo mala sola ti le lo se su
     sus al es ser hay va voy vas tengo tienes quiere sabe puedo mismo igual pido mia mio querer besame olvidar perdon
     cancion quiereme sigues dile dejame mentiras tusa duele vuelve volver bailamos corazones suerte pienso piensas
+    si antes despues hubiera hubieras fuera fueras sido conocido conocerte conoci olvide olvidarte extrano extrana
+    necesito tenerte verte besarte quererte
     siento sientes quieres quieren puede puedes podemos vamos voy vas vamos tengo tienes tiene estamos estan somos son
     fue fui era eran sera seria hace hacer dice decir mira mirar ves ver dame dar toma tomar deja dejar llama llamar
     espera esperar vuelve regresa lleva traer trae canta cantar baila grita llora rie sonrie suena noche dia tarde
@@ -113,13 +165,37 @@ const SHARED: ReadonlySet<string> = (() => {
 const HANGUL = /[가-힯ᄀ-ᇿ㄰-㆏]/;
 const KANA = /[぀-ヿ]/;
 const KANJI = /[一-鿿]/;
+/** Scripts that name a language outright. */
+const SCRIPTS: [LanguageCode, RegExp, number][] = [
+  ['hi', /[\u0900-\u097F]/, 3],
+  ['pa', /[\u0A00-\u0A7F]/, 3],
+  ['ar', /[\u0600-\u06FF]/, 3],
+  ['th', /[\u0E00-\u0E7F]/, 3],
+  ['el', /[\u0370-\u03FF]/, 3],
+  // Cyrillic is Russian unless a letter only Ukrainian has settles it.
+  ['ru', /[\u0400-\u04FF]/, 2],
+  ['uk', /[\u0456\u0457\u0454\u0491\u0406\u0407\u0404\u0490]/, 3],
+  ['ru', /[\u044B\u044D\u044A\u0451\u042B\u042D\u042A\u0401]/, 2],
+];
 /** Letters one language all but owns. */
 const LETTERS: [LanguageCode, RegExp][] = [
   ['es', /[ñ¿¡]/i],
   ['de', /[ßäöü]/i],
   ['pt', /[ãõ]/i],
-  ['fr', /[œêâîûëï]/i],
+  ['fr', /[œêîûëï]/i],
   ['it', /[ìò]/i],
+  ['sv', /[åäö]/i],
+  ['no', /[øæå]/i],
+  ['da', /[øæå]/i],
+  ['fi', /[äö]/i],
+  ['pl', /[łżźśćńąę]/i],
+  ['tr', /[ğĞıİşŞ]/],
+  ['ro', /[ăâșțşţ]/i],
+  ['hu', /[őű]/i],
+  ['cs', /[řěůňťď]/i],
+  // ė, į, ų and ū are Lithuanian's own; ą, ę, č, š and ž it shares with Polish and Czech.
+  ['lt', /[ėįųū]/i],
+  ['vi', /[đơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i],
 ];
 /** Letters several of them share: a nudge, never a verdict. */
 const SHARED_ACCENTS = /[áéíóúàèç]/i;
@@ -142,7 +218,9 @@ function words(text: string): string[] {
 }
 
 function empty(): Evidence {
-  return { en: 0, ko: 0, ja: 0, es: 0, fr: 0, de: 0, it: 0, pt: 0, nl: 0 };
+  const found = { en: 0 } as Evidence;
+  for (const code of LANGUAGE_CODES) found[code] = 0;
+  return found;
 }
 
 /**
@@ -156,7 +234,8 @@ function evidence(text: string, letters: boolean, skip: ReadonlySet<string> = ne
   if (letters) {
     if (HANGUL.test(text)) found.ko += 3;
     if (KANA.test(text)) found.ja += 3;
-    else if (KANJI.test(text)) found.ja += 1.5;
+    else if (KANJI.test(text)) found.zh += 3;
+    for (const [code, pattern, weight] of SCRIPTS) if (pattern.test(text)) found[code] += weight;
     for (const [code, pattern] of LETTERS) if (pattern.test(text)) found[code] += 2;
     if (SHARED_ACCENTS.test(text)) for (const code of ['es', 'fr', 'it', 'pt'] as const) found[code] += 1;
   }
@@ -168,6 +247,17 @@ function evidence(text: string, letters: boolean, skip: ReadonlySet<string> = ne
     }
   }
   return found;
+}
+
+/**
+ * A word only this language has, or a letter or script it owns, in the title;
+ * album words count too when `withAlbum` (Tokio Hotel's album "ENCORE" is not
+ * French evidence for an act that turns up once on a French playlist).
+ */
+function realEvidence(track: LanguageFacts, code: LanguageCode, withAlbum = true): boolean {
+  if (strongWords(track.title, code) + (withAlbum ? strongWords(track.album ?? '', code) : 0) > 0) return true;
+  if (LETTERS.some(([owner, pattern]) => owner === code && pattern.test(track.title))) return true;
+  return SCRIPTS.some(([owner, pattern]) => owner === code && pattern.test(track.title));
 }
 
 /** How many real (not merely shared) words of the language a text has. */
@@ -199,7 +289,11 @@ function rival(found: Evidence, code: LanguageCode): number {
   return Math.max(...LANGUAGE_CODES.filter((other) => other !== code).map((other) => found[other]));
 }
 
-const SCENES = new Set<LanguageCode>(['ko', 'ja']);
+/** Languages written in their own script, which alone is enough evidence. */
+const SCRIPT_LANGUAGES = new Set<LanguageCode>(['ko', 'ja', 'zh', 'hi', 'pa', 'ar', 'th', 'el', 'uk', 'ru']);
+
+/** Markets where an act on the list is that market's, whatever a title says: K-pop, J-pop, Mandopop, Bollywood, T-pop. */
+const SCENES = new Set<LanguageCode>(['ko', 'ja', 'zh', 'hi', 'pa', 'th']);
 
 /**
  * Sung in `code`, on the evidence. This takes a song out of the English lists,
@@ -210,15 +304,32 @@ export function looksLanguage(code: LanguageCode, track: LanguageFacts, index: L
   const onList = index.lists.get(code)?.has(artist) ?? false;
   if (SCENES.has(code) && onList) return true;
   const found = combined(track);
-  if (index.only.get(code)?.has(artist)) return !clearlyEnglish(found, code) && rival(found, code) <= found[code];
+  if (index.only.get(code)?.has(artist)) {
+    // Only languages the act is actually listed in compete: KAROL G's "si" and
+    // "te" are Romanian words too, but she sings nothing in Romanian.
+    const listedRivals = LANGUAGE_CODES.filter((other) => other !== code && index.lists.get(other)?.has(artist));
+    const strongest = Math.max(0, ...listedRivals.map((other) => found[other]));
+    return !clearlyEnglish(found, code) && strongest <= found[code];
+  }
   // Someone who sings in the language needs only a little evidence, and a tie
   // with a neighbouring language ("mas" is Spanish and Portuguese) goes their way.
-  if (onList) return found[code] > 0 && rival(found, code) <= found[code] && found.en <= found[code];
+  if (onList) {
+    if (!(found[code] > 0 && rival(found, code) <= found[code] && found.en <= found[code])) return false;
+    const regular = (index.counts?.get(code)?.get(artist) ?? 3) >= 3;
+    // A real word or letter of the language, not just a shared "on" or "la"; a
+    // regular on the list (three songs or more) is trusted on a little less.
+    // English acts turn up on foreign playlists, and this keeps their songs English.
+    if (realEvidence(track, code, regular)) return true;
+    return regular && found.en === 0;
+  }
+  // A script only this language (or its neighbour) writes in settles it: "Минор", "तुम ही हो".
+  if (SCRIPT_LANGUAGES.has(code) && found[code] >= 2 && rival(found, code) < found[code] && found.en < found[code]) return true;
   if (rival(found, code) >= found[code] || found.en >= found[code]) return false;
   // Anyone else needs a clearly foreign title: "Señorita", "Te Amo" and "Viva La Vida" are English songs.
   if (found[code] >= 3) return true;
   // Two real words of the language, and not a word of anything else: "Tage wie diese".
-  if (found[code] >= 2 && found.en === 0 && rival(found, code) <= 0.5 && strongWords(track.title, code) >= 2) return true;
+  // (A shared little word like "on", worth half, is not a contradiction.)
+  if (found[code] >= 2 && found.en <= 0.5 && rival(found, code) <= 0.5 && strongWords(track.title, code) >= 2) return true;
   // A letter the language owns (ä, ñ, ã...) in a title of several words, with a word to go with it: "Stille Nächte".
   const owned = LETTERS.find(([owner]) => owner === code)?.[1];
   return Boolean(owned?.test(track.title)) && words(track.title).length >= 2 && found[code] > found.en + 1 && rival(found, code) < found[code];
@@ -295,10 +406,26 @@ export function looksSpanish(track: LanguageFacts, latinArtists: ReadonlySet<str
   return looksLanguage('es', track, { lists: new Map([['es', latinArtists]]), only: new Map([['es', spanishOnly]]) });
 }
 
+
 export function spanishOnlyArtists(spanishList: LanguageFacts[], elsewhere: LanguageFacts[]): Set<string> {
   return onlyArtistsFor('es', spanishList, elsewhere);
 }
 
 export function clearlyNotSpanish(track: LanguageFacts): boolean {
   return clearlyNotLanguage('es', track);
+}
+
+/**
+ * Playlists stray: a K-pop playlist carries a J-pop song or two. An act belongs
+ * to the list where it has the most songs, so Kenshi Yonezu is Japanese however
+ * many Korean playlists he turns up on once. `counts` is per language, per
+ * lowercase artist.
+ */
+export function belongsToList(code: string, artist: string, counts: ReadonlyMap<string, ReadonlyMap<string, number>>): boolean {
+  const name = artist.toLowerCase();
+  const here = counts.get(code)?.get(name) ?? 0;
+  for (const [other, list] of counts) {
+    if (other !== code && (list.get(name) ?? 0) > here) return false;
+  }
+  return true;
 }

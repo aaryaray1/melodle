@@ -21,8 +21,8 @@ import { partyFor } from '../lib/parties.ts';
 import { interleave, partyTracks } from '../providers/party.ts';
 import { blendVariant, mixLabel, parseBlend } from '../../shared/blend.ts';
 import { isAlternateVersion } from '../../shared/versions.ts';
-import { facetTracks } from '../providers/facets.ts';
-import { englishOnly, LANGUAGE_VARIANTS, languageLabel } from '../providers/languages.ts';
+import { genreDecadeTracks } from '../providers/crossed.ts';
+import { englishOnly, LANGUAGE_VARIANTS, languageLabel, languagePool } from '../providers/languages.ts';
 import { fetchJson, mapLimit } from '../lib/http.ts';
 import { TtlCache } from '../lib/cache.ts';
 import { trackFromDeezer } from '../lib/preview.ts';
@@ -154,29 +154,23 @@ catalogueRouter.get('/pool', async (request, response) => {
     const decadeLabels = decades.map((part) => decadeLabel(part.id));
     const languageLabels = languages.map((part) => languageLabel(part.id));
 
-    // Each kind narrows the others: Korean + Pop + the 10s is K-pop from the
-    // 2010s. Several of one kind add up: Rock + Metal is both.
-    const one = <T>(list: T[]): (T | undefined)[] => (list.length ? list : [undefined]);
-    const jobs: (() => Promise<Track[]>)[] = [];
-    for (const language of one(languages)) {
-      for (const [index, genre] of one(genres).entries()) {
-        for (const decade of one(decades)) {
-          jobs.push(() =>
-            facetTracks({
-              lang: language?.id,
-              genre: genre?.id,
-              genreLabel: genre ? genreLabels[index] : undefined,
-              decade: decade?.id,
-            }),
-          );
-        }
-      }
-    }
+    // Genres and decades narrow each other: rock with the 10s is rock from the
+    // 2010s, in English. A language adds its own songs on top, never narrowing
+    // the rest: rock with Korean is English rock plus K-pop.
+    const englishJobs: (() => Promise<Track[]>)[] =
+      genres.length && decades.length
+        ? genres.flatMap((genre, index) =>
+            decades.map((decade) => () => genreDecadeTracks(genre.id, genreLabels[index] as string, decade.id)),
+          )
+        : [...genres, ...decades].map((part) => () => (part.source === 'charts' ? chartTracks(part.id) : decadeTracks(part.id)));
+    const languageJobs = languages.map((part) => () => languagePool(part.id));
     // A few at a time: a cold cache costs each list several Deezer calls.
-    const lists = await mapLimit(jobs, 3, (job) => job().catch(() => [] as Track[]));
+    const [englishLists, languageLists] = await Promise.all([
+      mapLimit(englishJobs, 3, (job) => job().catch(() => [] as Track[])),
+      mapLimit(languageJobs, 2, (job) => job().catch(() => [] as Track[])),
+    ]);
     // Round-robin, so a short list is not drowned by a long one.
-    let tracks = interleave(lists);
-    if (!languages.length) tracks = await englishOnly(tracks);
+    const tracks = interleave([await englishOnly(interleave(englishLists)), ...languageLists]);
     pool = { source, variant: blendVariant(parts), label: mixLabel(languageLabels, genreLabels, decadeLabels), tracks, dropped: 0 };
   } else if (source === 'decades') {
     const variant = requested || '1980s';

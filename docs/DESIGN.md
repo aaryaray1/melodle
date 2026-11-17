@@ -190,7 +190,10 @@ Belgian rock chart carries Brazilian and German rock. Players asked for genres
 in English and for Korean, Spanish, French and the rest as their own picks.
 
 So each language has a list, built like a decade: Deezer's chart for it where
-there is one, plus playlists whose titles name it. The lists then teach the
+there is one, plus playlists whose titles name it. A language adds its list to
+the pick; it never narrows the rest (rock with Korean is English rock plus
+K-pop), which is what players asked for once they had tried the narrowing
+version. Genres and decades still narrow each other. The lists then teach the
 classifier who sings in what. A song in a main list is moved out when its
 artist is on a language's list and its title or album shows a little of that
 language; when its artist sings only in that language (several songs on the

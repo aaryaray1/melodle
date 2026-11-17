@@ -287,8 +287,7 @@ export function SourceSheet({
           <div>
             <h3 className="source-name">By language</h3>
             <p className="source-blurb">
-              Songs sung in these languages, on their own or narrowed by the genres and decades above. Without one,
-              every list is English.
+              Adds popular songs in these languages to whatever else you pick. Without one, every list is English.
             </p>
           </div>
         </header>
@@ -429,7 +428,7 @@ export function SourceSheet({
                 ? 'Nothing picked: global hits.'
                 : picks.length >= MAX_BLEND
                   ? `That's the most you can mix: ${MAX_BLEND}.`
-                  : 'Genres, decades and languages narrow each other.'}
+                  : 'Genres and decades narrow each other; a language adds its songs on top.'}
           </p>
           <button type="button" className="button button-primary" onClick={playDraft}>
             Play

@@ -156,9 +156,26 @@ About 6,400 lines across `server/`, `src/`, `shared/`. 70 tests, all passing.
   acts with English titles. **The main lists are English only**: `englishOnly`
   drops anything the lists or the words of a title place elsewhere (artist on
   a list + a little evidence; unlisted + a clearly foreign title; Korean and
-  Japanese by artist alone, so BTS's Dynamite is Korean). Language x genre x
-  decade is built from the most specific playlists Deezer titles that way, and
-  the decade applied by release date when titles cannot. The old Spanish genre
+  Japanese by artist alone, so BTS's Dynamite is Korean). **A language adds
+  its songs on top of the pick and never narrows it** (owner's rule,
+  2026-11-16): Rock + Korean is English rock plus K-pop; genres and decades
+  still narrow each other. Labels read "Rock + Korean", "Pop · The 10s +
+  Korean". Each act is kept on the one language list where it has the most
+  songs (`belongsToList`), so J-pop that strays onto K-pop playlists stays
+  Japanese. **29 languages** (2026-11-17; Lithuanian added the same day): Arabic, Chinese, Czech, Danish,
+  Dutch, Filipino, Finnish, French, German, Greek, Hindi, Hungarian,
+  Indonesian, Italian, Japanese, Korean, Lithuanian (826 songs, all from user
+  playlists: Deezer has no editorial ones), Norwegian, Polish, Portuguese,
+  Punjabi, Romanian, Russian, Spanish, Swedish, Thai, Turkish, Ukrainian,
+  Vietnamese; chips alphabetical. Non-Latin scripts settle a language on sight
+  (Ukrainian letters win over Russian); Chinese, Hindi, Punjabi and Thai are
+  scenes like Korean and Japanese. Lists of 255-970 songs (Hungarian 97). A
+  small market's list keeps its most popular 60% when few songs pass the 300k
+  floor. English acts that turn up on foreign playlists stay English: an
+  occasional act needs a real word or letter of the language in the title
+  (album names do not count for them), and the single-language check reads
+  every English list. Known miss: The Corrs' "Summer Sunshine" counts as
+  Filipino (OPM playlists carry them, and nothing in the title is English). The old Spanish genre
   (`charts:197`) maps to `lang:es`. **Global hits is an ordinary pick** that
   mixes with genres (chips are plain toggles); nothing picked still means
   global hits. Measured after the last build: Pop has no songs by

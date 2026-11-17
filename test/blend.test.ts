@@ -59,9 +59,10 @@ test('a language is a part like a genre or a decade', () => {
   assert.deepEqual(parseBlend('lang:korean,lang:k'), [], 'only two-letter codes');
 });
 
-test('the label reads language, then genres, then decades', () => {
-  assert.equal(mixLabel(['Korean'], ['Pop'], ['The 10s']), 'Korean · Pop · The 10s');
+test('the label reads genres and decades first, then the languages added on top', () => {
+  assert.equal(mixLabel(['Korean'], ['Pop'], ['The 10s']), 'Pop · The 10s + Korean');
   assert.equal(mixLabel([], ['Rock', 'Metal'], []), 'Rock + Metal');
-  assert.equal(mixLabel(['French', 'German'], [], ['The 80s']), 'French + German · The 80s');
+  assert.equal(mixLabel(['French', 'German'], [], ['The 80s']), 'The 80s + French + German');
   assert.equal(mixLabel(['Spanish'], [], []), 'Spanish');
+  assert.equal(mixLabel(['Korean'], ['Rock'], []), 'Rock + Korean');
 });

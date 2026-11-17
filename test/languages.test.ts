@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { languageOf, offLanguageList, onlyArtistsFor, type LanguageIndex } from '../shared/language.ts';
+import { belongsToList, languageOf, offLanguageList, onlyArtistsFor, type LanguageIndex } from '../shared/language.ts';
 
 const song = (artist: string, title: string, album = '') => ({ artist, title, album });
 const index: LanguageIndex = {
@@ -90,4 +90,88 @@ test('a letter the language owns, in a title of several words with its words, se
   assert.equal(languageOf(song('Kontrollverlust', 'In der Weihnachtsbäckerei', ''), index), 'de');
   assert.equal(languageOf(song('Shawn Mendes', 'Señorita', ''), index), null, 'one word with one accent is not');
   assert.equal(languageOf(song('Beyoncé', 'Déjà Vu', 'B’Day'), index), null, 'shared accents do not count as owned letters');
+});
+
+test('an act is kept on the language list where it has more songs', () => {
+  const counts = new Map([
+    ['ko', new Map([['bts', 20], ['kenshi yonezu', 1]])],
+    ['ja', new Map([['kenshi yonezu', 6], ['bts', 1]])],
+  ]);
+  assert.ok(belongsToList('ko', 'BTS', counts));
+  assert.ok(!belongsToList('ko', 'Kenshi Yonezu', counts), 'J-pop that strayed onto a K-pop playlist');
+  assert.ok(belongsToList('ja', 'Kenshi Yonezu', counts));
+  assert.ok(belongsToList('ko', 'Someone New', counts), 'an act on no other list stays');
+});
+
+test('the new languages are told by script', () => {
+  const none: LanguageIndex = { lists: new Map(), only: new Map() };
+  assert.equal(languageOf(song('Arijit Singh', 'तुम ही हो', 'Aashiqui 2'), none), 'hi');
+  assert.equal(languageOf(song('Diljit Dosanjh', 'ਲਵਰ', ''), none), 'pa');
+  assert.equal(languageOf(song('Amr Diab', 'نور العين', ''), none), 'ar');
+  assert.equal(languageOf(song('Jay Chou', '晴天', '葉惠美'), none), 'zh');
+  assert.equal(languageOf(song('Official HIGE DANdism', 'ミックスナッツ', ''), none), 'ja', 'kana is Japanese, not Chinese');
+  assert.equal(languageOf(song('Miyagi', 'Минор', ''), none), 'ru');
+  assert.equal(languageOf(song('Okean Elzy', 'Обійми', ''), none), 'uk', 'Ukrainian letters win over Russian');
+  assert.equal(languageOf(song('Eleni Foureira', 'Φως', ''), none), 'el');
+  assert.equal(languageOf(song('Palmy', 'คิดถึง', ''), none), 'th');
+});
+
+test('the Latin-script ones are told by their words and letters', () => {
+  const none: LanguageIndex = { lists: new Map(), only: new Map() };
+  assert.equal(languageOf(song('Arijit Singh', 'Tum Hi Ho', 'Aashiqui 2'), none), 'hi', 'romanised Hindi');
+  assert.equal(languageOf(song('Tarkan', 'Şımarık', ''), none), null, 'one word with one letter is not enough');
+  assert.equal(languageOf(song('Tarkan', 'Dudu Dudu', ''), none), null);
+  assert.equal(languageOf(song('Sezen Aksu', 'Her Şeyi Yak', ''), none), 'tr');
+  assert.equal(languageOf(song('Veronica Maggio', 'Jag kommer', ''), none), 'sv');
+  assert.equal(languageOf(song('sanah', 'Nie chcę ciebie', ''), none), 'pl');
+  assert.equal(languageOf(song('Tulus', 'Hati-Hati di Jalan', ''), none), 'id');
+  assert.equal(languageOf(song('Sơn Tùng M-TP', 'Chúng Ta Của Hiện Tại', ''), none), 'vi');
+  assert.equal(languageOf(song('Ben&Ben', 'Kathang Isip', ''), none), 'tl');
+  assert.equal(languageOf(song('ABBA', 'Dancing Queen', 'Arrival'), none), null);
+});
+
+test('an English act that turns up on a foreign playlist keeps its English songs English', () => {
+  const strays: LanguageIndex = {
+    lists: new Map([
+      ['it', new Set(['lola young', 'måneskin'])],
+      ['fr', new Set(['fall out boy', 'angèle'])],
+    ]),
+    only: new Map(),
+    counts: new Map([
+      ['it', new Map([['lola young', 2], ['måneskin', 9]])],
+      ['fr', new Map([['fall out boy', 1], ['angèle', 12]])],
+    ]),
+  };
+  assert.equal(languageOf(song('Lola Young', 'Messy', 'This Wasn’t Meant For You Anyway'), strays), null);
+  assert.equal(languageOf(song('Fall Out Boy', 'Thnks fr th Mmrs', 'Infinity on High'), strays), null, 'a shared "on" is not French');
+  assert.equal(languageOf(song('Angèle', 'Une seule vie', ''), strays), 'fr', 'a real French word still counts');
+  assert.equal(languageOf(song('Måneskin', 'Le parole lontane', ''), strays), 'it', 'a regular on the list is trusted on a small hint');
+  assert.equal(languageOf(song('Lola Young', 'Le Messy', ''), strays), null, 'an occasional one is not');
+});
+
+test('an English song anywhere in the English lists makes an artist a crossover, not a single-language act', () => {
+  const danishList = [song('Nelly Furtado', 'Promiscuous'), song('Nelly Furtado', 'Maneater'), song('Medina', 'Kun For Mig'), song('Medina', 'Vi To')];
+  // "Say It Right" sits in Pop, not Global hits: every English list is looked at.
+  const only = onlyArtistsFor('da', danishList, [song('Nelly Furtado', 'Say It Right')]);
+  assert.ok(!only.has('nelly furtado'), 'nothing in her titles is Danish');
+  assert.ok(only.has('medina'));
+});
+
+test('an album name is not evidence for an act that is only occasionally on the list', () => {
+  const idx: LanguageIndex = { lists: new Map([['fr', new Set(['tokio hotel'])]]), only: new Map(), counts: new Map([['fr', new Map([['tokio hotel', 1]])]]) };
+  assert.equal(languageOf(song('Tokio Hotel', 'California Nights', 'ENCORE'), idx), null);
+});
+
+test('a single-language act is not outvoted by a language it is not even listed in', () => {
+  const idx: LanguageIndex = { lists: new Map([['es', new Set(['karol g'])]]), only: new Map([['es', new Set(['karol g'])]]) };
+  assert.equal(languageOf(song('KAROL G', 'Si Antes Te Hubiera Conocido', ''), idx), 'es');
+});
+
+test('Lithuanian is told by its own letters and words', () => {
+  const none: LanguageIndex = { lists: new Map(), only: new Map() };
+  assert.equal(languageOf(song('Jazzu', 'Kai Tu Šalia Manęs', ''), none), 'lt', 'ę and words');
+  assert.equal(languageOf(song('Andrius Mamontovas', 'Saulė Leidžias', ''), none), 'lt', 'ė is its own');
+  assert.equal(languageOf(song('Foje', 'Laikas Ir Vėjas', ''), none), 'lt');
+  assert.equal(languageOf(song('sanah', 'Nie chcę ciebie', ''), none), 'pl', 'Polish ę stays Polish');
+  assert.equal(languageOf(song('Jazzu', 'Free', ''), none), null);
 });
